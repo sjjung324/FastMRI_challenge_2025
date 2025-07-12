@@ -18,6 +18,8 @@ def train_classifier(data_dir, epochs=5, batch_size=8, lr=1e-3, save_path='class
     criterion = nn.CrossEntropyLoss()
     optimizer = optim.Adam(model.parameters(), lr=lr)
     log_path = Path(__file__).parent.parent / 'result' / 'classifier' / 'train_log.npy'
+    log_path.parent.mkdir(parents=True, exist_ok=True)
+
     log_arr = np.zeros((epochs, 5), dtype=np.float32)  # epoch, train_loss, train_acc, val_loss, val_acc
     for epoch in range(epochs):
         # Train
@@ -46,6 +48,18 @@ def train_classifier(data_dir, epochs=5, batch_size=8, lr=1e-3, save_path='class
         train_loss = running_loss / total
         train_acc = correct / total
 
+        if epoch == epochs -1:
+            # BN stabilization
+            model.train()
+            with torch.no_grad():
+                for epoch in range(2):
+                    for i, batch in enumerate(train_loader):
+                        images, _ = batch
+                        images = images.cuda()
+                        _ = model(images)
+                        if i == 0:
+                            print(f"[DEBUG][BN Stabilization] images: {images.shape}")
+
         # Validation
         model.eval()
         val_total, val_correct = 0, 0
@@ -70,10 +84,35 @@ def train_classifier(data_dir, epochs=5, batch_size=8, lr=1e-3, save_path='class
         val_loss = val_running_loss / val_total
         val_acc = val_correct / val_total
 
-        print(f"Epoch {epoch+1}/{epochs} | Train Loss: {train_loss:.4f} | Train Acc: {train_acc:.4f} | Val Loss: {val_loss:.4f} | Val Acc: {val_acc:.4f}")
+        # Validation for train dataset
+        val_tr_total, val_tr_correct = 0, 0
+        val_tr_running_loss = 0.0
+        with torch.no_grad():
+            for j, batch in enumerate(train_loader):
+                images, labels = batch
+                images = images.cuda()
+                labels = labels.cuda()
+
+                outputs = model(images)
+                if j == 0:
+                    print(f"[DEBUG][Val Train] images: {images.shape}, labels: {labels.shape}, labels unique: {labels.unique()}, dtype: {labels.dtype}")
+                    print(f"[DEBUG][Val Train] outputs: {outputs.shape}, sample: {outputs[0].detach().cpu().numpy()}")
+                    preds_dbg = outputs.argmax(1)
+                    print(f"[DEBUG][Val Train] preds: {preds_dbg.cpu().numpy()}, labels: {labels.cpu().numpy()}")
+                loss = criterion(outputs, labels)
+                _, preds = outputs.max(1)
+                val_tr_total += labels.size(0)
+                val_tr_correct += (preds == labels).sum().item()
+                val_tr_running_loss += loss.item() * labels.size(0)
+        val_tr_loss = val_tr_running_loss / val_tr_total
+        val_tr_acc = val_tr_correct / val_tr_total
+
+        print(f"Epoch {epoch+1}/{epochs} | Train Loss: {train_loss:.4f} | Train Acc: {train_acc:.4f} | Val Loss: {val_loss:.4f} | Val Acc: {val_acc:.4f} | Val Train Loss: {val_tr_loss:.4f} | Val Train Acc: {val_tr_acc:.4f}")
         log_arr[epoch] = [epoch+1, train_loss, train_acc, val_loss, val_acc]
     np.save(log_path, log_arr)
     print(f"Train/Val log saved to {log_path}")
+
+
 
     # Save model in unified format (dict) to result/classifier/model.pt
     result_dir = Path(__file__).parent.parent / 'result' / 'classifier'
@@ -95,8 +134,8 @@ def train_classifier(data_dir, epochs=5, batch_size=8, lr=1e-3, save_path='class
 if __name__ == '__main__':
     import argparse
     parser = argparse.ArgumentParser()
-    parser.add_argument('--data-dir', type=Path, required=True)
-    parser.add_argument('--epochs', type=int, default=5)
+    parser.add_argument('--data-dir', type=Path, default='../Data')
+    parser.add_argument('--epochs', type=int, default=2)
     parser.add_argument('--batch-size', type=int, default=8)
     parser.add_argument('--lr', type=float, default=1e-3)
     parser.add_argument('--seed', type=int, default=430, help='Fix random seed')

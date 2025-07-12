@@ -36,12 +36,12 @@ class SimpleClassifier(nn.Module):
             nn.MaxPool2d(2, 2),
 
             nn.AdaptiveAvgPool2d((1, 1)),
-            nn.Dropout(0.1)
+            nn.Dropout(0.)
         )
         self.classifier = nn.Sequential(
             nn.Linear(512, 256),
             nn.ReLU(inplace=True),
-            nn.Dropout(0.1),
+            nn.Dropout(0.),
             nn.Linear(256, 2)
         )
 
