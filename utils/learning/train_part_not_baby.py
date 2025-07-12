@@ -118,7 +118,7 @@ def train(args):
         print(f'Epoch #{epoch:2d} ............... {args.net_name} ...............')
         print(args.if_val)
 
-        train_loss, train_time = train_epoch(args, epoch, model, train_loader, optimizer, loss_type, scheduler)
+        train_loss, train_time = train_epoch(args, epoch, model, train_loader, optimizer, loss_type, scheduler=None)
         if args.if_val or epoch == args.num_epochs - 1:
             val_loss, num_subjects, reconstructions, targets, inputs, val_time = validate(args, model, val_loader)
         else:
