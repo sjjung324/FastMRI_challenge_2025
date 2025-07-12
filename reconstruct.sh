@@ -1,4 +1,4 @@
 python reconstruct.py \
   -b 2 \
   -n 'test_Unet' \
-  -p '/root/Data/leaderboard/'
+  -p 'C:/Users/user/Desktop/root/Data/leaderboard/'

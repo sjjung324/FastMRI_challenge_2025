@@ -1,3 +1,3 @@
 python leaderboard_eval.py \
-  -lp '/root/Data/leaderboard' \
-  -yp '../result/test_Unet/reconstructions_leaderboard'
+  -lp 'C:/Users/user/Desktop/root/Data/leaderboard' \
+  -yp 'C:/Users/user/Desktop/root/result/test_Unet/reconstructions_leaderboard'

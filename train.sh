@@ -1,8 +1,8 @@
 python train.py \
   -b 16 \
-  -e 1 \
+  -e 10 \
   -l 0.001 \
-  -r 5 \
+  -r 50 \
   -n 'test_Unet' \
-  -t '/root/Data/train/image/' \
-  -v '/root/Data/val/image/'
+  -t 'C:/Users/user/Desktop/root/Data/train/image/' \
+  -v 'C:/Users/user/Desktop/root/Data/val/image/'
