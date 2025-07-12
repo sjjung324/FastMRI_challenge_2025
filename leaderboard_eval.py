@@ -54,7 +54,7 @@ def forward(args):
     
     your_data = glob.glob(os.path.join(args.your_data_path,'*.h5'))
     if len(your_data) != 58:
-        raise  NotImplementedError('Your Data Size Should Be 58')           
+        raise  NotImplementedError(f'Your Data Size Should Be 58, but found {len(your_data)}')           
     
     ssim_total = 0
     idx = 0
