@@ -4,5 +4,5 @@ python train.py \
   -l 0.001 \
   -r 10 \
   -n 'test_Varnet' \
-  -t 'C:/fast_mri/Data/train/' \
-  -v 'C:/fast_mri/Data/val/'
+  -t '../Data/train/' \
+  -v '../Data/val/'
