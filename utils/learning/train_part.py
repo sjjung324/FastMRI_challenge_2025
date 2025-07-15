@@ -97,10 +97,15 @@ def train(args):
     torch.cuda.set_device(device)
     print('Current cuda device: ', torch.cuda.current_device())
 
+
     model = VarNet(num_cascades=args.cascade, 
                    chans=args.chans, 
                    sens_chans=args.sens_chans)
     model.to(device=device)
+
+    # 모델 파라미터 수 출력
+    num_params = sum(p.numel() for p in model.parameters())
+    print(f"Total number of model parameters: {num_params}")
 
     loss_type = SSIMLoss().to(device=device)
     optimizer = torch.optim.Adam(model.parameters(), args.lr)
