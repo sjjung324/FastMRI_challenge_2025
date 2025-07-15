@@ -43,6 +43,29 @@ def train_epoch(args, epoch, model, data_loader, optimizer, loss_type, scheduler
     return total_loss, time.perf_counter() - start_epoch
 
 
+def BN_stabilization(args, model, data_loader):
+    model.train()
+    start = start_iter = time.perf_counter()
+    with torch.no_grad():
+        for epoch in range(args.bn_epochs):
+            print(f'BN stabilization epoch {epoch + 1}/{args.bn_epochs}')
+            
+            for iter, data in enumerate(data_loader):
+                input, _, _, _, _ = data
+                input = input.cuda(non_blocking=True)
+                model(input)
+                if iter % args.report_interval == 0:
+                    print(
+                        f'Epoch = [{epoch + 1:3d}/{args.bn_epochs:3d}] '
+                        f'Iter = [{iter:4d}/{len(data_loader):4d}] '
+                        f'Time = {time.perf_counter() - start_iter:.4f}s',
+                    )
+
+                start_iter = time.perf_counter()
+    return time.perf_counter() - start
+
+    
+
 def validate(args, model, data_loader):
     model.eval()
     reconstructions = defaultdict(dict)
@@ -116,9 +139,15 @@ def train(args):
     val_loss_log = np.empty((0, 2))
     for epoch in range(start_epoch, args.num_epochs):
         print(f'Epoch #{epoch:2d} ............... {args.net_name} ...............')
-        print(args.if_val)
+        # print(args.if_val)
 
         train_loss, train_time = train_epoch(args, epoch, model, train_loader, optimizer, loss_type, scheduler=None)
+
+        if epoch == args.num_epochs - 1:
+            print("BN stabilization")
+            bn_time = BN_stabilization(args, model, train_loader)
+            print(f'BN stabilization time = {bn_time:.4f}s')
+
         if args.if_val or epoch == args.num_epochs - 1:
             val_loss, num_subjects, reconstructions, targets, inputs, val_time = validate(args, model, val_loader)
         else:
@@ -155,3 +184,5 @@ def train(args):
             print(
                 f'ForwardTime = {time.perf_counter() - start:.4f}s',
             )
+
+    
