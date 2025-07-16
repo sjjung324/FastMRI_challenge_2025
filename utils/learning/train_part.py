@@ -21,7 +21,7 @@ def train_epoch(args, epoch, model, data_loader, optimizer, loss_type):
     total_loss = 0.
 
     for iter, data in enumerate(data_loader):
-        mask, kspace, target, maximum, _, _ = data
+        mask, kspace, _, target, maximum, _, _ = data
         mask = mask.cuda(non_blocking=True)
         kspace = kspace.cuda(non_blocking=True)
         target = target.cuda(non_blocking=True)
@@ -54,7 +54,7 @@ def validate(args, model, data_loader):
 
     with torch.no_grad():
         for iter, data in enumerate(data_loader):
-            mask, kspace, target, _, fnames, slices = data
+            mask, kspace, _, target, _, fnames, slices = data
             kspace = kspace.cuda(non_blocking=True)
             mask = mask.cuda(non_blocking=True)
             output = model(kspace, mask)

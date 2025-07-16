@@ -1,4 +1,5 @@
 import argparse
+from html import parser
 from pathlib import Path
 import os, sys
 if os.getcwd() + '/utils/model/' not in sys.path:
@@ -6,7 +7,6 @@ if os.getcwd() + '/utils/model/' not in sys.path:
 
 from utils.learning.test_part import forward
 import time
-
     
 def parse():
     parser = argparse.ArgumentParser(description='Test Varnet on FastMRI challenge Images',
@@ -16,11 +16,23 @@ def parse():
     parser.add_argument('-n', '--net_name', type=Path, default='test_varnet', help='Name of network')
     parser.add_argument('-p', '--path_data', type=Path, default='/Data/leaderboard/', help='Directory of test data')
     parser.add_argument('-m', '--modality', type=str, default='all', help='Modality to use for training (e.g., "all", "brain", "knee")')
-    
-    parser.add_argument('--cascade', type=int, default=1, help='Number of cascades | Should be less than 12')
-    parser.add_argument('--chans', type=int, default=9, help='Number of channels for cascade U-Net')
-    parser.add_argument('--sens_chans', type=int, default=4, help='Number of channels for sensitivity map U-Net')
     parser.add_argument("--input_key", type=str, default='kspace', help='Name of input key')
+    parser.add_argument("--input_img_key", type=str, default='image_input', help='Name of input image key')
+
+    # Brain Varnet parameters
+    parser.add_argument('--cascade_brain', type=int, default=1, help='Number of cascades | Should be less than 12')
+    parser.add_argument('--chans_brain', type=int, default=9, help='Number of channels for cascade U-Net')
+    parser.add_argument('--sens_chans_brain', type=int, default=4, help='Number of channels for sensitivity map U-Net')
+
+    # Knee Varnet parameters
+    parser.add_argument('--cascade_knee', type=int, default=1, help='Number of cascades | Should be less than 12')
+    parser.add_argument('--chans_knee', type=int, default=9, help='Number of channels for cascade U-Net')
+    parser.add_argument('--sens_chans_knee', type=int, default=4, help='Number of channels for sensitivity map U-Net')
+
+    # classifier, brain varnet, knee varnet 경로 인자
+    parser.add_argument('--classifier_path', type=Path, required=True, help='Path to classifier model (.pt)')
+    parser.add_argument('--brain_varnet_path', type=Path, required=True, help='Path to brain Varnet model (.pt)')
+    parser.add_argument('--knee_varnet_path', type=Path, required=True, help='Path to knee Varnet model (.pt)')
 
     args = parser.parse_args()
     return args
@@ -29,7 +41,6 @@ def parse():
 if __name__ == '__main__':
     args = parse()
     args.exp_dir = '../result' / args.net_name / 'checkpoints'
-
     start_time = time.time()
     
     # acc4
@@ -46,5 +57,4 @@ if __name__ == '__main__':
     
     reconstructions_time = time.time() - start_time
     print(f'Total Reconstruction Time = {reconstructions_time:.2f}s')
-
     print('Success!') if reconstructions_time < 3600 else print('Fail!')

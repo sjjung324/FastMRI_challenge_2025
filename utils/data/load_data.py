@@ -6,9 +6,10 @@ from pathlib import Path
 import numpy as np
 
 class SliceData(Dataset):
-    def __init__(self, root, transform, input_key, target_key, forward=False, modality='all'):
+    def __init__(self, root, transform, input_key, input_img_key, target_key, forward=False, modality='all'):
         self.transform = transform
         self.input_key = input_key
+        self.input_img_key = input_img_key
         self.target_key = target_key
         self.forward = forward
         self.image_examples = []
@@ -22,14 +23,13 @@ class SliceData(Dataset):
                 return files
             return [f for f in files if modality in f.name]
 
-        if not forward:
-            image_files = list(Path(root / "image").iterdir())
-            image_files = _filter_files(image_files)
-            for fname in sorted(image_files):
-                num_slices = self._get_metadata(fname)
-                self.image_examples += [
-                    (fname, slice_ind) for slice_ind in range(num_slices)
-                ]
+        image_files = list(Path(root / "image").iterdir())
+        image_files = _filter_files(image_files)
+        for fname in sorted(image_files):
+            num_slices = self._get_metadata(fname)
+            self.image_examples += [
+                (fname, slice_ind) for slice_ind in range(num_slices)
+            ]
 
         kspace_files = list(Path(root / "kspace").iterdir())
         kspace_files = _filter_files(kspace_files)
@@ -44,6 +44,8 @@ class SliceData(Dataset):
         with h5py.File(fname, "r") as hf:
             if self.input_key in hf.keys():
                 num_slices = hf[self.input_key].shape[0]
+            elif self.input_img_key in hf.keys() and self.forward:
+                num_slices = hf[self.input_img_key].shape[0]
             elif self.target_key in hf.keys():
                 num_slices = hf[self.target_key].shape[0]
         return num_slices
@@ -52,8 +54,7 @@ class SliceData(Dataset):
         return len(self.kspace_examples)
 
     def __getitem__(self, i):
-        if not self.forward:
-            image_fname, _ = self.image_examples[i]
+        image_fname, _ = self.image_examples[i]
         kspace_fname, dataslice = self.kspace_examples[i]
         if not self.forward and image_fname.name != kspace_fname.name:
             raise ValueError(f"Image file {image_fname.name} does not match kspace file {kspace_fname.name}")
@@ -61,6 +62,9 @@ class SliceData(Dataset):
         with h5py.File(kspace_fname, "r") as hf:
             input = hf[self.input_key][dataslice]
             mask =  np.array(hf["mask"])
+        with h5py.File(image_fname, "r") as hf:
+            input_img = hf[self.input_img_key][dataslice]
+
         if self.forward:
             target = -1
             attrs = -1
@@ -68,8 +72,8 @@ class SliceData(Dataset):
             with h5py.File(image_fname, "r") as hf:
                 target = hf[self.target_key][dataslice]
                 attrs = dict(hf.attrs)
-            
-        return self.transform(mask, input, target, attrs, kspace_fname.name, dataslice)
+
+        return self.transform(mask, input, input_img, target, attrs, kspace_fname.name, dataslice)
 
 
 def create_data_loaders(data_path, args, shuffle=False, isforward=False, modality='all'):
@@ -83,6 +87,7 @@ def create_data_loaders(data_path, args, shuffle=False, isforward=False, modalit
         root=data_path,
         transform=DataTransform(isforward, max_key_),
         input_key=args.input_key,
+        input_img_key=args.input_img_key,
         target_key=target_key_,
         forward=isforward,
         modality=modality

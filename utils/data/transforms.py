@@ -16,7 +16,7 @@ class DataTransform:
     def __init__(self, isforward, max_key):
         self.isforward = isforward
         self.max_key = max_key
-    def __call__(self, mask, input, target, attrs, fname, slice):
+    def __call__(self, mask, input, input_img, target, attrs, fname, slice):
         if not self.isforward:
             target = to_tensor(target)
             maximum = attrs[self.max_key]
@@ -27,4 +27,4 @@ class DataTransform:
         kspace = to_tensor(input * mask)
         kspace = torch.stack((kspace.real, kspace.imag), dim=-1)
         mask = torch.from_numpy(mask.reshape(1, 1, kspace.shape[-2], 1).astype(np.float32)).byte()
-        return mask, kspace, target, maximum, fname, slice
+        return mask, kspace, input_img, target, maximum, fname, slice
