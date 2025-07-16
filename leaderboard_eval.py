@@ -54,13 +54,21 @@ def forward(args):
     
     your_data = glob.glob(os.path.join(args.your_data_path,'*.h5'))
     if len(your_data) != 58:
-        raise  NotImplementedError(f'Your Data Size Should Be 58, but found {len(your_data)}')           
+        raise  NotImplementedError(f'Your Data Size Should Be 58, but found {len(your_data)}')
+
+    if args.modality not in ['all', 'brain', 'knee']:
+        raise ValueError(f"Invalid modality '{args.modality}'. Choose from 'all', 'brain', or 'knee'.")
+
+    if args.modality == 'all':
+        test_parts = ['knee_test', 'brain_test']
+    else:
+        test_parts = [f'{args.modality}_test']
     
     ssim_total = 0
     idx = 0
     ssim_calculator = SSIM().to(device=device)
     with torch.no_grad():
-        for part in ['brain_test', 'knee_test']:
+        for part in test_parts:
             for i_subject in range(29):
                 l_fname = os.path.join(args.leaderboard_data_path, part + str(i_subject+1) + '.h5')
                 y_fname = os.path.join(args.your_data_path, part + str(i_subject+1) + '.h5')
@@ -112,6 +120,7 @@ if __name__ == '__main__':
     """
     parser.add_argument('-yp', '--path_your_data', type=Path, default='../result/test_Unet/reconstructions_leaderboard/')
     parser.add_argument('-key', '--output_key', type=str, default='reconstruction')
+    parser.add_argument('-m', '--modality', type=str, default='all', help='Modality to use for training (e.g., "all", "brain", "knee")')
     
     args = parser.parse_args()
 

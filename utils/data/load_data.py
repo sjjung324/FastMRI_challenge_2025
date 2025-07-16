@@ -6,7 +6,7 @@ from pathlib import Path
 import numpy as np
 
 class SliceData(Dataset):
-    def __init__(self, root, transform, input_key, target_key, forward=False):
+    def __init__(self, root, transform, input_key, target_key, forward=False, modality='all'):
         self.transform = transform
         self.input_key = input_key
         self.target_key = target_key
@@ -14,19 +14,27 @@ class SliceData(Dataset):
         self.image_examples = []
         self.kspace_examples = []
 
+        if modality not in ['all', 'brain', 'knee']:
+            raise ValueError(f"Invalid modality '{modality}'. Choose from 'all', 'brain', or 'knee'.")
+
+        def _filter_files(files):
+            if modality == 'all':
+                return files
+            return [f for f in files if modality in f.name]
+
         if not forward:
             image_files = list(Path(root / "image").iterdir())
+            image_files = _filter_files(image_files)
             for fname in sorted(image_files):
                 num_slices = self._get_metadata(fname)
-
                 self.image_examples += [
                     (fname, slice_ind) for slice_ind in range(num_slices)
                 ]
 
         kspace_files = list(Path(root / "kspace").iterdir())
+        kspace_files = _filter_files(kspace_files)
         for fname in sorted(kspace_files):
             num_slices = self._get_metadata(fname)
-
             self.kspace_examples += [
                 (fname, slice_ind) for slice_ind in range(num_slices)
             ]
@@ -64,7 +72,7 @@ class SliceData(Dataset):
         return self.transform(mask, input, target, attrs, kspace_fname.name, dataslice)
 
 
-def create_data_loaders(data_path, args, shuffle=False, isforward=False):
+def create_data_loaders(data_path, args, shuffle=False, isforward=False, modality='all'):
     if isforward == False:
         max_key_ = args.max_key
         target_key_ = args.target_key
@@ -76,7 +84,8 @@ def create_data_loaders(data_path, args, shuffle=False, isforward=False):
         transform=DataTransform(isforward, max_key_),
         input_key=args.input_key,
         target_key=target_key_,
-        forward = isforward
+        forward=isforward,
+        modality=modality
     )
 
     data_loader = DataLoader(

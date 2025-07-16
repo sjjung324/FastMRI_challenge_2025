@@ -114,8 +114,8 @@ def train(args):
     start_epoch = 0
 
     
-    train_loader = create_data_loaders(data_path = args.data_path_train, args = args, shuffle=True)
-    val_loader = create_data_loaders(data_path = args.data_path_val, args = args)
+    train_loader = create_data_loaders(data_path = args.data_path_train, args = args, shuffle=True, modality=args.modality)
+    val_loader = create_data_loaders(data_path = args.data_path_val, args = args, shuffle=False, modality=args.modality)
     
     val_loss_log = np.empty((0, 2))
     for epoch in range(start_epoch, args.num_epochs):
