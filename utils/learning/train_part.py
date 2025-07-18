@@ -51,7 +51,7 @@ def train_epoch(args, epoch, model, data_loader, optimizer, loss_type, using_noi
     return total_loss, time.perf_counter() - start_epoch
 
 
-def validate(args, model, data_loader, using_noise_mask=False):
+def validate(args, model, data_loader, using_noise_mask=False, validate_on_gpu=False):
     model.eval()
     reconstructions = defaultdict(dict)
     targets = defaultdict(dict)
@@ -63,13 +63,14 @@ def validate(args, model, data_loader, using_noise_mask=False):
             kspace = kspace.cuda(non_blocking=True)
             mask = mask.cuda(non_blocking=True)
             output = model(kspace, mask)
-
+            target = target.cuda(non_blocking=True)
+       
             if using_noise_mask:
                 target, output = apply_mask_to_target_and_reconstruction(target, output, modality=args.modality)
 
             for i in range(output.shape[0]):
                 reconstructions[fnames[i]][int(slices[i])] = output[i].cpu().numpy()
-                targets[fnames[i]][int(slices[i])] = target[i].numpy()
+                targets[fnames[i]][int(slices[i])] = target[i].cpu().numpy()
 
     for fname in reconstructions:
         reconstructions[fname] = np.stack(
@@ -163,14 +164,14 @@ def train(args):
     optimizer = torch.optim.Adam(model.parameters(), args.lr)
 
     best_val_loss = 1.
-    start_epoch = 0
+    start_epoch = 1
 
     
     train_loader = create_data_loaders(data_path = args.data_path_train, args = args, shuffle=True, modality=args.modality)
     val_loader = create_data_loaders(data_path = args.data_path_val, args = args, shuffle=False, modality=args.modality)
     
     val_loss_log = np.empty((0, 2))
-    for epoch in range(start_epoch, args.num_epochs):
+    for epoch in range(start_epoch, args.num_epochs + 1):
         print(f'Epoch #{epoch:2d} ............... {args.net_name} ...............')
         
         train_loss, train_time = train_epoch(args, epoch, model, train_loader, optimizer, loss_type, args.using_noise_mask)
