@@ -10,7 +10,8 @@ from collections import defaultdict
 from utils.data.load_data import create_data_loaders
 from utils.common.utils import save_reconstructions, ssim_loss
 from utils.common.loss_function import SSIMLoss
-from utils.model.varnet import VarNet
+# from utils.model.varnet import VarNet
+from utils.model.feature_varnet import FeatureVarNet_sh_w as VarNet
 
 import os
 
