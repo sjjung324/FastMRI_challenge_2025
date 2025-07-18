@@ -50,7 +50,6 @@ def train_epoch(args, epoch, model, data_loader, optimizer, loss_type, using_noi
         }
         # Apply augmentation with probability p_aug
         if using_augmentation and random.random() < p_aug:
-            print(f"[DEBUG] Use augmentation with config: {augment_config}")
             kspace, target = augment_kspace(kspace, augment_config)
 
         output = model(kspace, mask)
