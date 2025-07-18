@@ -4,7 +4,8 @@ import torch
 from collections import defaultdict
 from utils.common.utils import save_reconstructions
 from utils.data.load_data import create_data_loaders
-from utils.model.varnet import VarNet
+# from utils.model.varnet import VarNet
+from utils.model.feature_varnet import FeatureVarNet_sh_w as VarNet
 from utils.model.simple_classifier import SimpleClassifier
 
 def test(args, brain_model, knee_model, classifier_model, data_loader):
