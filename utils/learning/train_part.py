@@ -5,6 +5,7 @@ import torch.nn as nn
 import time
 from pathlib import Path
 import copy
+import cv2
 
 from collections import defaultdict
 from utils.data.load_data import create_data_loaders
@@ -15,7 +16,7 @@ from utils.model.feature_varnet import FeatureVarNet_sh_w as VarNet
 
 import os
 
-def train_epoch(args, epoch, model, data_loader, optimizer, loss_type):
+def train_epoch(args, epoch, model, data_loader, optimizer, loss_type, using_noise_mask=False):
     model.train()
     start_epoch = start_iter = time.perf_counter()
     len_loader = len(data_loader)
@@ -29,6 +30,9 @@ def train_epoch(args, epoch, model, data_loader, optimizer, loss_type):
         maximum = maximum.cuda(non_blocking=True)
 
         output = model(kspace, mask)
+        if using_noise_mask:
+            target, output = apply_mask_to_target_and_reconstruction(target, output, modality=args.modality)
+
         loss = loss_type(output, target, maximum)
         optimizer.zero_grad()
         loss.backward()
@@ -47,7 +51,7 @@ def train_epoch(args, epoch, model, data_loader, optimizer, loss_type):
     return total_loss, time.perf_counter() - start_epoch
 
 
-def validate(args, model, data_loader):
+def validate(args, model, data_loader, using_noise_mask=False):
     model.eval()
     reconstructions = defaultdict(dict)
     targets = defaultdict(dict)
@@ -59,6 +63,9 @@ def validate(args, model, data_loader):
             kspace = kspace.cuda(non_blocking=True)
             mask = mask.cuda(non_blocking=True)
             output = model(kspace, mask)
+
+            if using_noise_mask:
+                target, output = apply_mask_to_target_and_reconstruction(target, output, modality=args.modality)
 
             for i in range(output.shape[0]):
                 reconstructions[fnames[i]][int(slices[i])] = output[i].cpu().numpy()
@@ -92,6 +99,48 @@ def save_model(args, exp_dir, epoch, model, optimizer, best_val_loss, is_new_bes
     if is_new_best:
         shutil.copyfile(exp_dir / 'model.pt', exp_dir / 'best_model.pt')
 
+def compute_mask_from_target(target, modality='all'):
+    """
+    Given a target (numpy array or torch tensor) and part name ('knee_test' or 'brain_test'),
+    compute and return the mask using the specified logic.
+    """
+    if isinstance(target, torch.Tensor):
+        target_np = target.detach().cpu().numpy()
+    else:
+        target_np = target
+    mask = np.zeros(target_np.shape, dtype=np.uint8)
+    if modality == 'knee' or modality == 'all':
+        mask[target_np > 2e-5] = 1
+    elif modality == 'brain':
+        mask[target_np > 5e-5] = 1
+    else:
+        raise ValueError(f"Invalid modality '{modality}'. Choose from 'all', 'brain', or 'knee'.")
+    
+    kernel = np.ones((3, 3), np.uint8)
+    # If target is 3D (batch), apply per slice
+    if mask.ndim == 3:
+        for i in range(mask.shape[0]):
+            mask[i] = cv2.erode(mask[i], kernel, iterations=1)
+            mask[i] = cv2.dilate(mask[i], kernel, iterations=15)
+            mask[i] = cv2.erode(mask[i], kernel, iterations=14)
+    else:
+        mask = cv2.erode(mask, kernel, iterations=1)
+        mask = cv2.dilate(mask, kernel, iterations=15)
+        mask = cv2.erode(mask, kernel, iterations=14)
+
+    mask = (torch.from_numpy(mask).to(target)).type(torch.float)
+    return mask
+
+def apply_mask_to_target_and_reconstruction(target, reconstruction, modality='all'):
+    """
+    Apply the mask to both target and reconstruction.
+    """
+
+    mask = compute_mask_from_target(target, modality)
+    masked_target = target * mask
+    masked_reconstruction = reconstruction * mask
+    return masked_target, masked_reconstruction
+
         
 def train(args):
     device = torch.device(f'cuda:{args.GPU_NUM}' if torch.cuda.is_available() else 'cpu')
@@ -101,7 +150,9 @@ def train(args):
 
     model = VarNet(num_cascades=args.cascade, 
                    chans=args.chans, 
-                   sens_chans=args.sens_chans)
+                   sens_chans=args.sens_chans,
+                   sens_pools=args.sens_pools,
+                   pools=args.pools)
     model.to(device=device)
 
     # 모델 파라미터 수 출력
@@ -122,8 +173,8 @@ def train(args):
     for epoch in range(start_epoch, args.num_epochs):
         print(f'Epoch #{epoch:2d} ............... {args.net_name} ...............')
         
-        train_loss, train_time = train_epoch(args, epoch, model, train_loader, optimizer, loss_type)
-        val_loss, num_subjects, reconstructions, targets, inputs, val_time = validate(args, model, val_loader)
+        train_loss, train_time = train_epoch(args, epoch, model, train_loader, optimizer, loss_type, args.using_noise_mask)
+        val_loss, num_subjects, reconstructions, targets, inputs, val_time = validate(args, model, val_loader, args.using_noise_mask)
         
         val_loss_log = np.append(val_loss_log, np.array([[epoch, val_loss]]), axis=0)
         file_path = os.path.join(args.val_loss_dir, "val_loss_log")
