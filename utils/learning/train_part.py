@@ -6,6 +6,7 @@ import time
 from pathlib import Path
 import copy
 import cv2
+import random
 
 from collections import defaultdict
 from utils.data.load_data import create_data_loaders
@@ -13,14 +14,22 @@ from utils.common.utils import save_reconstructions, ssim_loss
 from utils.common.loss_function import SSIMLoss
 # from utils.model.varnet import VarNet
 from utils.model.feature_varnet import FeatureVarNet_sh_w as VarNet
+from utils.data.augmentation import augment_kspace
 
 import os
 
-def train_epoch(args, epoch, model, data_loader, optimizer, loss_type, using_noise_mask=False):
+def train_epoch(args, epoch, model, data_loader, optimizer, loss_type, using_noise_mask=False, using_augmentation=False):
     model.train()
     start_epoch = start_iter = time.perf_counter()
     len_loader = len(data_loader)
     total_loss = 0.
+
+    # Exponential ramp-up schedule for augmentation probability
+    p_max = getattr(args, 'aug_p_max', 0.55)
+    c = getattr(args, 'aug_curve', 5)
+    T = args.num_epochs + getattr(args, 'num_aug_epochs', 0) - 1
+    t = epoch - 1
+    p_aug = p_max * (1 - np.exp(-c * t / T)) / (1 - np.exp(-c))
 
     for iter, data in enumerate(data_loader):
         mask, kspace, _, target, maximum, _, _ = data
@@ -28,6 +37,21 @@ def train_epoch(args, epoch, model, data_loader, optimizer, loss_type, using_noi
         kspace = kspace.cuda(non_blocking=True)
         target = target.cuda(non_blocking=True)
         maximum = maximum.cuda(non_blocking=True)
+
+        augment_config = {
+            'flip': random.choice([True, False]),
+            'flip_horizontal': random.choice([True, False]),
+            'translate': random.choice([True, False]),
+            'translate_max': random.randint(5, 15),
+            'affine': random.choice([True, False]),
+            'affine_rot': random.randint(0, 10),
+            'affine_scale': round(random.uniform(0.05, 0.12), 3),
+            'affine_shear': random.randint(0, 5)
+        }
+        # Apply augmentation with probability p_aug
+        if using_augmentation and random.random() < p_aug:
+            print(f"[DEBUG] Use augmentation with config: {augment_config}")
+            kspace, target = augment_kspace(kspace, augment_config)
 
         output = model(kspace, mask)
         if using_noise_mask:
@@ -41,7 +65,7 @@ def train_epoch(args, epoch, model, data_loader, optimizer, loss_type, using_noi
 
         if iter % args.report_interval == 0:
             print(
-                f'Epoch = [{epoch:3d}/{args.num_epochs:3d}] '
+                f'Epoch = [{epoch:3d}/{T + 1:3d}] '
                 f'Iter = [{iter:4d}/{len(data_loader):4d}] '
                 f'Loss = {loss.item():.4g} '
                 f'Time = {time.perf_counter() - start_iter:.4f}s',
@@ -165,16 +189,18 @@ def train(args):
 
     best_val_loss = 1.
     start_epoch = 1
+    start_epoch = 1
 
     
     train_loader = create_data_loaders(data_path = args.data_path_train, args = args, shuffle=True, modality=args.modality)
     val_loader = create_data_loaders(data_path = args.data_path_val, args = args, shuffle=False, modality=args.modality)
     
     val_loss_log = np.empty((0, 2))
-    for epoch in range(start_epoch, args.num_epochs + 1):
+    num_epochs = args.num_epochs + args.num_aug_epochs
+    for epoch in range(start_epoch, num_epochs + 1):
         print(f'Epoch #{epoch:2d} ............... {args.net_name} ...............')
-        
-        train_loss, train_time = train_epoch(args, epoch, model, train_loader, optimizer, loss_type, args.using_noise_mask)
+
+        train_loss, train_time = train_epoch(args, epoch, model, train_loader, optimizer, loss_type, args.using_noise_mask, using_augmentation=(epoch > args.num_epochs))
         val_loss, num_subjects, reconstructions, targets, inputs, val_time = validate(args, model, val_loader, args.using_noise_mask)
         
         val_loss_log = np.append(val_loss_log, np.array([[epoch, val_loss]]), axis=0)
@@ -193,7 +219,7 @@ def train(args):
 
         save_model(args, args.exp_dir, epoch + 1, model, optimizer, best_val_loss, is_new_best)
         print(
-            f'Epoch = [{epoch:4d}/{args.num_epochs:4d}] TrainLoss = {train_loss:.4g} '
+            f'Epoch = [{epoch:4d}/{num_epochs:4d}] TrainLoss = {train_loss:.4g} '
             f'ValLoss = {val_loss:.4g} TrainTime = {train_time:.4f}s ValTime = {val_time:.4f}s',
         )
 
