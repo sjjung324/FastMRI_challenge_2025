@@ -13,10 +13,6 @@ def complex_flip(img, horizontal=True):
     else:
         return img.flip(-3)
 
-def complex_rotate90(img):
-    # Rotate by 90 degrees
-    return img.rot90(1, [-2, -3])
-
 def complex_translate(img, max_pixels=8):
     # Integer translation
     tx = np.random.randint(-max_pixels, max_pixels+1)
@@ -39,7 +35,7 @@ def complex_affine(img, rot_range=10, scale_range=0.1, shear_range=5):
         for c in range(C):
             real = img[s, c, :, :, 0].unsqueeze(0).unsqueeze(0)  # (1, 1, H, W)
             imag = img[s, c, :, :, 1].unsqueeze(0).unsqueeze(0)
-            grid = F.affine_grid(theta.unsqueeze(0), real.shape, align_corners=False)
+            grid = F.affine_grid(theta.unsqueeze(0), real.shape, align_corners=False).to(real.device)
             real_t = F.grid_sample(real, grid, mode='bicubic', align_corners=False).squeeze(0).squeeze(0)
             imag_t = F.grid_sample(imag, grid, mode='bicubic', align_corners=False).squeeze(0).squeeze(0)
             coil_out.append(torch.stack([real_t, imag_t], dim=-1))  # (H, W, 2)
@@ -51,7 +47,7 @@ def augment_kspace(kspace, augment_config=None):
     """
     kspace: (S, C, H, W, 2) complex-valued multi-coil k-space tensor
     augment_config: dict with keys for each transform and their parameters
-    Returns: augmented k-space tensor (S, C, H, W, 2)
+    Returns: augmented k-space tensor (S, C, H, W, 2) and corresponding image domain tensor (S, C, H, W, 2)
     """
     augment_config = augment_config or {}
     # 1. kspace -> image domain
@@ -59,8 +55,6 @@ def augment_kspace(kspace, augment_config=None):
     # 2. Apply augmentations (no RSS)
     if augment_config.get('flip', False):
         img = complex_flip(img, horizontal=augment_config.get('flip_horizontal', True))
-    if augment_config.get('rotate90', False):
-        img = complex_rotate90(img)
     if augment_config.get('translate', False):
         img = complex_translate(img, max_pixels=augment_config.get('translate_max', 8))
     if augment_config.get('affine', False):
@@ -72,7 +66,8 @@ def augment_kspace(kspace, augment_config=None):
         )
     # 3. image domain -> kspace
     kspace_aug = fft2c(img)
-    return kspace_aug
+    target = center_crop(rss(complex_abs(img), dim=1), 384, 384)  # (S, 384, 384)
+    return kspace_aug, target
 
 def visualize_augmentation(kspace, augment_config=None, coil_idx=0):
     """
@@ -83,7 +78,7 @@ def visualize_augmentation(kspace, augment_config=None, coil_idx=0):
     # 1. 원본/augment된 image (배치별)
     img_orig = rss(complex_abs(ifft2c(kspace)), dim=1)  # (S, H, W)
     img_orig = center_crop(img_orig, 384, 384)
-    kspace_aug = augment_kspace(kspace, augment_config)
+    kspace_aug, _ = augment_kspace(kspace, augment_config)
     img_aug = rss(complex_abs(ifft2c(kspace_aug)), dim=1)  # (S, H, W)
     img_aug = center_crop(img_aug, 384, 384)
 
