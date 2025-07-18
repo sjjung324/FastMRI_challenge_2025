@@ -51,8 +51,8 @@ def forward(args):
     print ('Current cuda device ', torch.cuda.current_device())
 
     # brain, knee varnet 모델 로드
-    brain_model = VarNet(num_cascades=args.cascade_brain, chans=args.chans_brain, sens_chans=args.sens_chans_brain)
-    knee_model = VarNet(num_cascades=args.cascade_knee, chans=args.chans_knee, sens_chans=args.sens_chans_knee)
+    brain_model = VarNet(num_cascades=args.cascade_brain, chans=args.chans_brain, sens_chans=args.sens_chans_brain, pools=args.pools_brain, sens_pools=args.sens_pools_brain)
+    knee_model = VarNet(num_cascades=args.cascade_knee, chans=args.chans_knee, sens_chans=args.sens_chans_knee, pools=args.pools_knee, sens_pools=args.sens_pools_knee)
     brain_ckpt = torch.load(args.brain_varnet_path, map_location=device, weights_only=False)
     knee_ckpt = torch.load(args.knee_varnet_path, map_location=device, weights_only=False)
     if 'model' in brain_ckpt:

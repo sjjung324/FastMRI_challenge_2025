@@ -23,11 +23,15 @@ def parse():
     parser.add_argument('--cascade_brain', type=int, default=1, help='Number of cascades | Should be less than 12')
     parser.add_argument('--chans_brain', type=int, default=9, help='Number of channels for cascade U-Net')
     parser.add_argument('--sens_chans_brain', type=int, default=4, help='Number of channels for sensitivity map U-Net')
+    parser.add_argument('--pools_brain', type=int, default=4, help='Number of pooling layers for cascade U-Net | 4 in original varnet')
+    parser.add_argument('--sens_pools_brain', type=int, default=4, help='Number of pooling layers for sensitivity map U-Net | 4 in original varnet')
 
     # Knee Varnet parameters
     parser.add_argument('--cascade_knee', type=int, default=1, help='Number of cascades | Should be less than 12')
     parser.add_argument('--chans_knee', type=int, default=9, help='Number of channels for cascade U-Net')
     parser.add_argument('--sens_chans_knee', type=int, default=4, help='Number of channels for sensitivity map U-Net')
+    parser.add_argument('--pools_knee', type=int, default=4, help='Number of pooling layers for cascade U-Net | 4 in original varnet')
+    parser.add_argument('--sens_pools_knee', type=int, default=4, help='Number of pooling layers for sensitivity map U-Net | 4 in original varnet')
 
     # classifier, brain varnet, knee varnet 경로 인자
     parser.add_argument('--classifier_path', type=Path, required=True, help='Path to classifier model (.pt)')
