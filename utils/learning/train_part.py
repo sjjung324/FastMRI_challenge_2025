@@ -39,14 +39,14 @@ def train_epoch(args, epoch, model, data_loader, optimizer, loss_type, using_noi
         maximum = maximum.cuda(non_blocking=True)
 
         augment_config = {
-            'flip': random.choice([True, False]),
+            'flip': False,
             'flip_horizontal': random.choice([True, False]),
             'translate': random.choice([True, False]),
-            'translate_max': random.randint(5, 15),
-            'affine': random.choice([True, False]),
-            'affine_rot': random.randint(0, 10),
-            'affine_scale': round(random.uniform(0.05, 0.12), 3),
-            'affine_shear': random.randint(0, 5)
+            'translate_max': 2,
+            'affine': True,
+            'affine_rot': 5,
+            'affine_scale': 0.1,
+            'affine_shear': 5
         }
         # Apply augmentation with probability p_aug
         if using_augmentation and random.random() < p_aug:
