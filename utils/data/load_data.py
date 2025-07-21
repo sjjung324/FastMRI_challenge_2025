@@ -24,10 +24,12 @@ class SliceData(Dataset):
             return [f for f in files if modality in f.name]
         
         def _filter_acceleration(files):
-            if acc == 4:
+            if acc == "4":
                 return [f for f in files if 'acc4' in f.name]
-            elif acc == 8:
+            elif acc == "8":
                 return [f for f in files if 'acc8' in f.name]
+            else:
+                return files
 
         image_files = list(Path(root / "image").iterdir())
         image_files = _filter_modality(image_files)
