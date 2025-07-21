@@ -32,6 +32,8 @@ def train_epoch(args, epoch, model, data_loader, optimizer, loss_type, using_noi
     p_aug = p_max * (1 - np.exp(-c * t / T)) / (1 - np.exp(-c))
 
     for iter, data in enumerate(data_loader):
+        #debug
+        if iter > 30: break
         mask, kspace, _, target, maximum, _, _ = data
         mask = mask.cuda(non_blocking=True)
         kspace = kspace.cuda(non_blocking=True)
@@ -74,7 +76,7 @@ def train_epoch(args, epoch, model, data_loader, optimizer, loss_type, using_noi
     return total_loss, time.perf_counter() - start_epoch
 
 
-def validate(args, model, data_loader, using_noise_mask=False, validate_on_gpu=False):
+def validate(args, model, data_loader, using_noise_mask=False):
     model.eval()
     reconstructions = defaultdict(dict)
     targets = defaultdict(dict)
@@ -85,8 +87,10 @@ def validate(args, model, data_loader, using_noise_mask=False, validate_on_gpu=F
             mask, kspace, _, target, _, fnames, slices = data
             kspace = kspace.cuda(non_blocking=True)
             mask = mask.cuda(non_blocking=True)
-            output = model(kspace, mask)
             target = target.cuda(non_blocking=True)
+
+            output = model(kspace, mask)
+            
        
             if using_noise_mask:
                 target, output = apply_mask_to_target_and_reconstruction(target, output, modality=args.modality)
@@ -107,6 +111,46 @@ def validate(args, model, data_loader, using_noise_mask=False, validate_on_gpu=F
     num_subjects = len(reconstructions)
     return metric_loss, num_subjects, reconstructions, targets, None, time.perf_counter() - start
 
+
+def validate_on_gpu(args, model, data_loader, loss_type, using_noise_mask=False):
+    model.eval()
+    start = time.perf_counter()
+    len_loader = len(data_loader)
+    total_loss = 0.
+
+    reconstructions = defaultdict(dict)
+    targets = defaultdict(dict)
+    
+    with torch.no_grad():
+        for iter, data in enumerate(data_loader):
+            mask, kspace, _, target, maximum, fnames, slices = data
+            kspace = kspace.cuda(non_blocking=True)
+            mask = mask.cuda(non_blocking=True)
+            target = target.cuda(non_blocking=True)
+            maximum = maximum.cuda(non_blocking=True)
+
+            output = model(kspace, mask)
+            if using_noise_mask:
+                target, output = apply_mask_to_target_and_reconstruction(target, output, modality=args.modality)
+
+            loss = loss_type(output, target, maximum)
+            total_loss += loss.item()
+
+            for i in range(output.shape[0]):
+                reconstructions[fnames[i]][int(slices[i])] = output[i].cpu().numpy()
+                targets[fnames[i]][int(slices[i])] = target[i].cpu().numpy()
+
+    for fname in reconstructions:
+        reconstructions[fname] = np.stack(
+            [out for _, out in sorted(reconstructions[fname].items())]
+        )
+    for fname in targets:
+        targets[fname] = np.stack(
+            [out for _, out in sorted(targets[fname].items())]
+        )
+
+    return total_loss, len_loader, reconstructions, targets, None, time.perf_counter() - start
+    
 
 def save_model(args, exp_dir, epoch, model, optimizer, best_val_loss, is_new_best):
     torch.save(
@@ -195,17 +239,25 @@ def train(args):
     val_loader = create_data_loaders(data_path = args.data_path_val, args = args, shuffle=False)
     
     val_loss_log = np.empty((0, 2))
+    train_loss_log = np.empty((0, 2))
     num_epochs = args.num_epochs + args.num_aug_epochs
     for epoch in range(start_epoch, num_epochs + 1):
         print(f'Epoch #{epoch:2d} ............... {args.net_name} ...............')
 
         train_loss, train_time = train_epoch(args, epoch, model, train_loader, optimizer, loss_type, args.using_noise_mask, using_augmentation=(epoch > args.num_epochs))
-        val_loss, num_subjects, reconstructions, targets, inputs, val_time = validate(args, model, val_loader, args.using_noise_mask)
+        if args.validate_on_gpu:
+            val_loss, num_subjects, reconstructions, targets, inputs, val_time = validate_on_gpu(args, model, val_loader, loss_type, args.using_noise_mask)
+        else:
+            val_loss, num_subjects, reconstructions, targets, inputs, val_time = validate(args, model, val_loader, args.using_noise_mask)
         
-        val_loss_log = np.append(val_loss_log, np.array([[epoch, val_loss]]), axis=0)
-        file_path = os.path.join(args.val_loss_dir, "val_loss_log")
-        np.save(file_path, val_loss_log)
-        print(f"loss file saved! {file_path}")
+        train_loss_log = np.append(train_loss_log, np.array([[epoch, train_loss]]), axis=0)
+        val_loss_log = np.append(val_loss_log, np.array([[epoch, val_loss / num_subjects]]), axis=0)
+
+        trian_los_file_path = os.path.join(args.val_loss_dir, "train_loss_log")
+        np.save(trian_los_file_path, train_loss_log)
+        val_los_file_path = os.path.join(args.val_loss_dir, "val_loss_log")
+        np.save(val_los_file_path, val_loss_log)
+        print(f"loss file saved! {val_los_file_path}")
 
         train_loss = torch.tensor(train_loss).cuda(non_blocking=True)
         val_loss = torch.tensor(val_loss).cuda(non_blocking=True)
