@@ -26,6 +26,7 @@ def parse():
     parser.add_argument('-t', '--data-path-train', type=Path, default='/Data/train/', help='Directory of train data')
     parser.add_argument('-v', '--data-path-val', type=Path, default='/Data/val/', help='Directory of validation data')
     parser.add_argument('-m', '--modality', type=str, default='all', help='Modality to use for training (e.g., "all", "brain", "knee")')
+    parser.add_argument('--acc', type=int, default=4, help='Acceleration of k-space data for training (e.g., 4, 8)')
     parser.add_argument('--using-noise-mask', action='store_true', help='Whether to use noise mask during training')
     
     parser.add_argument('--cascade', type=int, default=10, help='Number of cascades | Should be less than 12') ## important hyperparameter

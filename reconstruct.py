@@ -15,7 +15,6 @@ def parse():
     parser.add_argument('-b', '--batch-size', type=int, default=1, help='Batch size')
     parser.add_argument('-n', '--net_name', type=Path, default='test_varnet', help='Name of network')
     parser.add_argument('-p', '--path_data', type=Path, default='/Data/leaderboard/', help='Directory of test data')
-    parser.add_argument('-m', '--modality', type=str, default='all', help='Modality to use for training (e.g., "all", "brain", "knee")')
     parser.add_argument("--input_key", type=str, default='kspace', help='Name of input key')
     parser.add_argument("--input_img_key", type=str, default='image_input', help='Name of input image key')
 

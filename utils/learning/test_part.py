@@ -76,6 +76,6 @@ def forward(args):
     classifier_model.to(device=device)
     classifier_model.eval()
 
-    forward_loader = create_data_loaders(data_path = args.data_path, args = args, isforward = True, modality=args.modality)
+    forward_loader = create_data_loaders(data_path = args.data_path, args = args, isforward = True)
     reconstructions, inputs = test(args, brain_model, knee_model, classifier_model, forward_loader)
     save_reconstructions(reconstructions, args.forward_dir, inputs=inputs)

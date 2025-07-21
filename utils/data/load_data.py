@@ -6,7 +6,7 @@ from pathlib import Path
 import numpy as np
 
 class SliceData(Dataset):
-    def __init__(self, root, transform, input_key, input_img_key, target_key, forward=False, modality='all'):
+    def __init__(self, root, transform, input_key, input_img_key, target_key, forward=False, modality='all', acc=4):
         self.transform = transform
         self.input_key = input_key
         self.input_img_key = input_img_key
@@ -18,13 +18,20 @@ class SliceData(Dataset):
         if modality not in ['all', 'brain', 'knee']:
             raise ValueError(f"Invalid modality '{modality}'. Choose from 'all', 'brain', or 'knee'.")
 
-        def _filter_files(files):
+        def _filter_modality(files):
             if modality == 'all':
                 return files
             return [f for f in files if modality in f.name]
+        
+        def _filter_acceleration(files):
+            if acc == 4:
+                return [f for f in files if 'acc4' in f.name]
+            elif acc == 8:
+                return [f for f in files if 'acc8' in f.name]
 
         image_files = list(Path(root / "image").iterdir())
-        image_files = _filter_files(image_files)
+        image_files = _filter_modality(image_files)
+        image_files = _filter_acceleration(image_files)
         for fname in sorted(image_files):
             num_slices = self._get_metadata(fname)
             self.image_examples += [
@@ -32,7 +39,8 @@ class SliceData(Dataset):
             ]
 
         kspace_files = list(Path(root / "kspace").iterdir())
-        kspace_files = _filter_files(kspace_files)
+        kspace_files = _filter_modality(kspace_files)
+        kspace_files = _filter_acceleration(kspace_files)
         for fname in sorted(kspace_files):
             num_slices = self._get_metadata(fname)
             self.kspace_examples += [
@@ -76,7 +84,7 @@ class SliceData(Dataset):
         return self.transform(mask, input, input_img, target, attrs, kspace_fname.name, dataslice)
 
 
-def create_data_loaders(data_path, args, shuffle=False, isforward=False, modality='all'):
+def create_data_loaders(data_path, args, shuffle=False, isforward=False):
     if isforward == False:
         max_key_ = args.max_key
         target_key_ = args.target_key
@@ -90,7 +98,8 @@ def create_data_loaders(data_path, args, shuffle=False, isforward=False, modalit
         input_img_key=args.input_img_key,
         target_key=target_key_,
         forward=isforward,
-        modality=modality
+        modality=args.modality,
+        acc=args.acc
     )
 
     data_loader = DataLoader(
