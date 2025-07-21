@@ -32,8 +32,6 @@ def train_epoch(args, epoch, model, data_loader, optimizer, loss_type, using_noi
     p_aug = p_max * (1 - np.exp(-c * t / T)) / (1 - np.exp(-c))
 
     for iter, data in enumerate(data_loader):
-        #debug
-        if iter > 30: break
         mask, kspace, _, target, maximum, _, _ = data
         mask = mask.cuda(non_blocking=True)
         kspace = kspace.cuda(non_blocking=True)
