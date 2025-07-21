@@ -27,6 +27,7 @@ def parse():
     parser.add_argument('-v', '--data-path-val', type=Path, default='/Data/val/', help='Directory of validation data')
     parser.add_argument('-m', '--modality', type=str, default='all', help='Modality to use for training (e.g., "all", "brain", "knee")')
     parser.add_argument('--using-noise-mask', action='store_true', help='Whether to use noise mask during training')
+    parser.add_argument('--validate-on-gpu', action='store_true', help='Validate on GPU if set')
     
     parser.add_argument('--cascade', type=int, default=10, help='Number of cascades | Should be less than 12') ## important hyperparameter
     parser.add_argument('--chans', type=int, default=18, help='Number of channels for cascade U-Net | 18 in original varnet') ## important hyperparameter
