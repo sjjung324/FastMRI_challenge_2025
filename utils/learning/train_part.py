@@ -221,6 +221,13 @@ def train(args):
                    sens_chans=args.sens_chans,
                    sens_pools=args.sens_pools,
                    pools=args.pools)
+    if args.pretrained_model_path is not None:
+        model_ckpt = torch.load(args.pretrained_model_path, map_location=device, weights_only=False)
+        if 'model' in model_ckpt:
+            model.load_state_dict(model_ckpt['model'])
+        else:
+            model.load_state_dict(model_ckpt)
+
     model.to(device=device)
 
     # 모델 파라미터 수 출력
