@@ -42,11 +42,11 @@ def train_epoch(args, epoch, model, data_loader, optimizer, loss_type, using_noi
             'flip': random.choice([True, False]),
             'flip_horizontal': True,
             'translate': random.choice([True, False]),
-            'translate_max': 2,
+            'translate_max': 5,
             'affine': True,
-            'affine_rot': 5,
-            'affine_scale': 0.05,
-            'affine_shear': 0
+            'affine_rot': 3.0,
+            'affine_scale': 0.0,
+            'affine_shear': 0.0
         }
         # Apply augmentation with probability p_aug
         if using_augmentation and random.random() < p_aug:

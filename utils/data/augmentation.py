@@ -19,8 +19,7 @@ def complex_translate(img, max_pixels=8):
     ty = np.random.randint(-max_pixels, max_pixels+1)
     return torch.roll(img, shifts=(ty, tx), dims=(-3, -2))
 
-def complex_affine(img,
-                   rot_range=0, scale_range=0, shear_range=0):
+def complex_affine(img, rot_range=0, scale_range=0, shear_range=0):
     angle_deg = np.random.uniform(-rot_range, rot_range)
     scale = np.random.uniform(1-scale_range, 1+scale_range)
     shear_deg = np.random.uniform(-shear_range, shear_range)
@@ -55,12 +54,9 @@ def complex_affine(img,
             real = img[s, c, :, :, 0].unsqueeze(0).unsqueeze(0)  # (1,1,H,W)
             imag = img[s, c, :, :, 1].unsqueeze(0).unsqueeze(0)
 
-            grid = F.affine_grid(theta, real.shape,
-                                 align_corners=False).to(real.device)
-            real_t = F.grid_sample(real, grid, mode='bicubic',
-                                   align_corners=False).squeeze()
-            imag_t = F.grid_sample(imag, grid, mode='bicubic',
-                                   align_corners=False).squeeze()
+            grid = F.affine_grid(theta, real.shape, align_corners=False).to(real.device)
+            real_t = F.grid_sample(real, grid, mode='bicubic', align_corners=False).squeeze()
+            imag_t = F.grid_sample(imag, grid, mode='bicubic', align_corners=False).squeeze()
 
             coil_out.append(torch.stack([real_t, imag_t], dim=-1))
         out.append(torch.stack(coil_out, dim=0))
@@ -76,6 +72,14 @@ def augment_kspace(kspace, augment_config=None):
     augment_config = augment_config or {}
     # 1. kspace -> image domain
     img = ifft2c(kspace) # (S, C, H, W, 2)
+
+    # Center crop to 384x384 before augmentation
+    S, C, H, W, _ = img.shape
+    ## (S,C,2,H,W) → (B,H,W) 로 펼치기  (B = S*C*2)
+    x = img.permute(0,1,4,2,3).contiguous().view(-1, H, W)  # (B,H,W)
+    img = center_crop(x, 384, 384)  # (B, 384, 384)
+    img = img.view(S, C, 2, 384, 384).permute(0, 1, 3, 4, 2).contiguous()  # (S, C, 384, 384, 2)
+
     # 2. Apply augmentations (no RSS)
     if augment_config.get('flip', False):
         img = complex_flip(img, horizontal=augment_config.get('flip_horizontal', True))
@@ -88,9 +92,14 @@ def augment_kspace(kspace, augment_config=None):
             scale_range=augment_config.get('affine_scale', 0),
             shear_range=augment_config.get('affine_shear', 0)
         )
+        
     # 3. image domain -> kspace
+    target = rss(complex_abs(img), dim=1)  # (S, 384, 384)
+    x = img.permute(0,1,4,2,3).contiguous().view(-1, 384, 384)  # (B, 384, 384)
+    img = center_crop(x, H, W)  # (B, H, W)
+    img = img.view(S, C, 2, H, W).permute(0, 1, 3, 4, 2).contiguous()  # (S, C, H, W, 2)
     kspace_aug = fft2c(img)
-    target = center_crop(rss(complex_abs(img), dim=1), 384, 384)  # (S, 384, 384)
+
     return kspace_aug, target
 
 def visualize_augmentation(kspace, augment_config=None):
