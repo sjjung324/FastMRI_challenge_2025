@@ -58,26 +58,22 @@ def train_epoch(args, epoch, model, data_loader, optimizer, using_noise_mask=Fal
         if using_augmentation and random.random() < p_aug:
             kspace, target = augment_kspace(kspace, augment_config)
 
-        if scaler is not None:
-            with autocast(dtype=torch.bfloat16, device_type='cuda'):
-                output = model(kspace, mask)
-        else:
+
+        with autocast(dtype=torch.bfloat16, device_type='cuda'):
             output = model(kspace, mask)
+        # output = model(kspace, mask)
 
         if using_noise_mask:
             target, output = apply_mask_to_target_and_reconstruction(target, output, modality=args.modality)
 
-        if scaler is not None:
-            with autocast(dtype=torch.bfloat16, device_type='cuda'):
-                loss = alpha * SSIM_loss(output, target, maximum) + (1 - alpha) * L1_loss(output, target, maximum)
-            scaler.scale(loss).backward()
-            scaler.step(optimizer)
-            scaler.update()
-        else:
+        with autocast(dtype=torch.bfloat16, device_type='cuda'):
             loss = alpha * SSIM_loss(output, target, maximum) + (1 - alpha) * L1_loss(output, target, maximum)
-            optimizer.zero_grad()
-            loss.backward()
-            optimizer.step()
+        # loss = alpha * SSIM_loss(output, target, maximum) + (1 - alpha) * L1_loss(output, target, maximum)
+
+        
+        optimizer.zero_grad()
+        loss.backward()
+        optimizer.step()
 
         total_loss += loss.item()
 
@@ -254,7 +250,8 @@ def train(args):
     print(f"Total number of model parameters: {num_params}")
 
     optimizer = torch.optim.AdamW(model.parameters(), args.lr, weight_decay=1e-6)
-    scaler = GradScaler()
+    # scaler = GradScaler()
+    scaler = None
 
     best_val_loss = 1.
     start_epoch = 1
