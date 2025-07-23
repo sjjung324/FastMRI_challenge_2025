@@ -6,7 +6,7 @@ from pathlib import Path
 import numpy as np
 
 class SliceData(Dataset):
-    def __init__(self, root, transform, input_key, input_img_key, target_key, forward=False, modality='all', acc=4):
+    def __init__(self, root, transform, input_key, input_img_key, target_key, forward=False, modality='all', acc=0):
         self.transform = transform
         self.input_key = input_key
         self.input_img_key = input_img_key
@@ -100,8 +100,8 @@ def create_data_loaders(data_path, args, shuffle=False, isforward=False):
         input_img_key=args.input_img_key,
         target_key=target_key_,
         forward=isforward,
-        modality=args.modality,
-        acc=args.acc
+        modality=getattr(args, 'modality', 'all'),
+        acc= getattr(args, 'acc', 0)
     )
 
     data_loader = DataLoader(
