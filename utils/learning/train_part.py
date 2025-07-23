@@ -13,12 +13,13 @@ import os
 from collections import defaultdict
 from utils.data.load_data import create_data_loaders
 from utils.common.utils import save_reconstructions, ssim_loss
-from utils.common.loss_function import SSIMLoss
+from utils.common.loss_function import SSIMLoss, L1Loss
 # from utils.model.varnet import VarNet
 from utils.model.feature_varnet import FeatureVarNet_sh_w as VarNet
 from utils.data.augmentation import augment_kspace
 
-def train_epoch(args, epoch, model, data_loader, optimizer, loss_type, using_noise_mask=False, using_augmentation=False, scaler=None):
+def train_epoch(args, epoch, model, data_loader, optimizer, using_noise_mask=False, using_augmentation=False, scaler=None):
+    device = torch.device(f'cuda:{args.GPU_NUM}' if torch.cuda.is_available() else 'cpu')
     model.train()
     start_epoch = start_iter = time.perf_counter()
     len_loader = len(data_loader)
@@ -30,6 +31,10 @@ def train_epoch(args, epoch, model, data_loader, optimizer, loss_type, using_noi
     T = getattr(args, 'num_aug_epochs', 0) + 1
     t = epoch - args.num_epochs
     p_aug = p_max * (1 - np.exp(-c * t / T)) / (1 - np.exp(-c))
+
+    alpha = args.alpha
+    L1_loss = L1Loss().to(device=device)
+    SSIM_loss = SSIMLoss().to(device=device)
 
     for iter, data in enumerate(data_loader):
         mask, kspace, _, target, maximum, _, _ = data
@@ -64,12 +69,12 @@ def train_epoch(args, epoch, model, data_loader, optimizer, loss_type, using_noi
 
         if scaler is not None:
             with autocast(dtype=torch.bfloat16, device_type='cuda'):
-                loss = loss_type(output, target, maximum)
+                loss = alpha * SSIM_loss(output, target, maximum) + (1 - alpha) * L1_loss(output, target, maximum)
             scaler.scale(loss).backward()
             scaler.step(optimizer)
             scaler.update()
         else:
-            loss = loss_type(output, target, maximum)
+            loss = alpha * SSIM_loss(output, target, maximum) + (1 - alpha) * L1_loss(output, target, maximum)
             optimizer.zero_grad()
             loss.backward()
             optimizer.step()
@@ -124,11 +129,13 @@ def validate(args, model, data_loader, using_noise_mask=False):
     return metric_loss, num_subjects, reconstructions, targets, None, time.perf_counter() - start
 
 
-def validate_on_gpu(args, model, data_loader, loss_type, using_noise_mask=False):
+def validate_on_gpu(args, model, data_loader, using_noise_mask=False):
+    device = torch.device(f'cuda:{args.GPU_NUM}' if torch.cuda.is_available() else 'cpu')
     model.eval()
     start = time.perf_counter()
     len_loader = len(data_loader)
     total_loss = 0.
+    SSIM_loss = SSIMLoss().to(device=device)
 
     reconstructions = defaultdict(dict)
     targets = defaultdict(dict)
@@ -145,7 +152,7 @@ def validate_on_gpu(args, model, data_loader, loss_type, using_noise_mask=False)
             if using_noise_mask:
                 target, output = apply_mask_to_target_and_reconstruction(target, output, modality=args.modality)
 
-            loss = loss_type(output, target, maximum)
+            loss = SSIM_loss(output, target, maximum)
             total_loss += loss.item()
 
             for i in range(output.shape[0]):
@@ -246,8 +253,7 @@ def train(args):
     num_params = sum(p.numel() for p in model.parameters())
     print(f"Total number of model parameters: {num_params}")
 
-    loss_type = SSIMLoss().to(device=device)
-    optimizer = torch.optim.Adam(model.parameters(), args.lr)
+    optimizer = torch.optim.AdamW(model.parameters(), args.lr, weight_decay=1e-6)
     scaler = GradScaler()
 
     best_val_loss = 1.
@@ -264,9 +270,9 @@ def train(args):
     for epoch in range(start_epoch, num_epochs + 1):
         print(f'Epoch #{epoch:2d} ............... {args.net_name} ...............')
 
-        train_loss, train_time = train_epoch(args, epoch, model, train_loader, optimizer, loss_type, args.using_noise_mask, using_augmentation=(epoch > args.num_epochs), scaler=scaler)
+        train_loss, train_time = train_epoch(args, epoch, model, train_loader, optimizer, args.using_noise_mask, using_augmentation=(epoch > args.num_epochs), scaler=scaler)
         if args.validate_on_gpu:
-            val_loss, num_subjects, reconstructions, targets, inputs, val_time = validate_on_gpu(args, model, val_loader, loss_type, args.using_noise_mask)
+            val_loss, num_subjects, reconstructions, targets, inputs, val_time = validate_on_gpu(args, model, val_loader, args.using_noise_mask)
         else:
             val_loss, num_subjects, reconstructions, targets, inputs, val_time = validate(args, model, val_loader, args.using_noise_mask)
         

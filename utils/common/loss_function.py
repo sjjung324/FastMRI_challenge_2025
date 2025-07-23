@@ -9,6 +9,22 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 
+class L1Loss(nn.Module):
+    """
+    L1 loss module for image reconstruction.
+    """
+
+    def __init__(self):
+        super().__init__()
+
+    def forward(self, X, Y, _):
+        # Match input shape logic to SSIMLoss
+        # X, Y: (batch, height, width)
+        X = X.unsqueeze(1)
+        Y = Y.unsqueeze(1)
+        # L1 loss (mean absolute error)
+        return torch.abs(X - Y).mean()
+
 class SSIMLoss(nn.Module):
     """
     SSIM loss module.
