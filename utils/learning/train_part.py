@@ -7,6 +7,8 @@ from pathlib import Path
 import copy
 import cv2
 import random
+from torch.amp import GradScaler, autocast
+import os
 
 from collections import defaultdict
 from utils.data.load_data import create_data_loaders
@@ -16,9 +18,7 @@ from utils.common.loss_function import SSIMLoss
 from utils.model.feature_varnet import FeatureVarNet_sh_w as VarNet
 from utils.data.augmentation import augment_kspace
 
-import os
-
-def train_epoch(args, epoch, model, data_loader, optimizer, loss_type, using_noise_mask=False, using_augmentation=False):
+def train_epoch(args, epoch, model, data_loader, optimizer, loss_type, using_noise_mask=False, using_augmentation=False, scaler=None):
     model.train()
     start_epoch = start_iter = time.perf_counter()
     len_loader = len(data_loader)
@@ -26,9 +26,9 @@ def train_epoch(args, epoch, model, data_loader, optimizer, loss_type, using_noi
 
     # Exponential ramp-up schedule for augmentation probability
     p_max = getattr(args, 'aug_p_max', 0.55)
-    c = getattr(args, 'aug_curve', 5)
-    T = args.num_epochs + getattr(args, 'num_aug_epochs', 0) - 1
-    t = epoch - 1
+    c = getattr(args, 'aug_curve', 3)
+    T = getattr(args, 'num_aug_epochs', 0) + 1
+    t = epoch - args.num_epochs
     p_aug = p_max * (1 - np.exp(-c * t / T)) / (1 - np.exp(-c))
 
     for iter, data in enumerate(data_loader):
@@ -41,8 +41,9 @@ def train_epoch(args, epoch, model, data_loader, optimizer, loss_type, using_noi
         augment_config = {
             'flip': random.choice([True, False]),
             'flip_horizontal': True,
-            'translate': random.choice([True, False]),
-            'translate_max': 5,
+            # 'translate': random.choice([True, False]),
+            'translate': False,
+            'translate_max': 8,
             'affine': True,
             'affine_rot': 3.0,
             'affine_scale': 0.0,
@@ -52,19 +53,32 @@ def train_epoch(args, epoch, model, data_loader, optimizer, loss_type, using_noi
         if using_augmentation and random.random() < p_aug:
             kspace, target = augment_kspace(kspace, augment_config)
 
-        output = model(kspace, mask)
+        if scaler is not None:
+            with autocast(dtype=torch.bfloat16, device_type='cuda'):
+                output = model(kspace, mask)
+        else:
+            output = model(kspace, mask)
+
         if using_noise_mask:
             target, output = apply_mask_to_target_and_reconstruction(target, output, modality=args.modality)
 
-        loss = loss_type(output, target, maximum)
-        optimizer.zero_grad()
-        loss.backward()
-        optimizer.step()
+        if scaler is not None:
+            with autocast(dtype=torch.bfloat16, device_type='cuda'):
+                loss = loss_type(output, target, maximum)
+            scaler.scale(loss).backward()
+            scaler.step(optimizer)
+            scaler.update()
+        else:
+            loss = loss_type(output, target, maximum)
+            optimizer.zero_grad()
+            loss.backward()
+            optimizer.step()
+
         total_loss += loss.item()
 
         if iter % args.report_interval == 0:
             print(
-                f'Epoch = [{epoch:3d}/{T + 1:3d}] '
+                f'Epoch = [{epoch:3d}/{T - 1 + args.num_epochs:3d}] '
                 f'Iter = [{iter:4d}/{len(data_loader):4d}] '
                 f'Loss = {loss.item():.4g} '
                 f'Time = {time.perf_counter() - start_iter:.4f}s',
@@ -234,6 +248,7 @@ def train(args):
 
     loss_type = SSIMLoss().to(device=device)
     optimizer = torch.optim.Adam(model.parameters(), args.lr)
+    scaler = GradScaler()
 
     best_val_loss = 1.
     start_epoch = 1
@@ -249,7 +264,7 @@ def train(args):
     for epoch in range(start_epoch, num_epochs + 1):
         print(f'Epoch #{epoch:2d} ............... {args.net_name} ...............')
 
-        train_loss, train_time = train_epoch(args, epoch, model, train_loader, optimizer, loss_type, args.using_noise_mask, using_augmentation=(epoch > args.num_epochs))
+        train_loss, train_time = train_epoch(args, epoch, model, train_loader, optimizer, loss_type, args.using_noise_mask, using_augmentation=(epoch > args.num_epochs), scaler=scaler)
         if args.validate_on_gpu:
             val_loss, num_subjects, reconstructions, targets, inputs, val_time = validate_on_gpu(args, model, val_loader, loss_type, args.using_noise_mask)
         else:
