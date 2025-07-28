@@ -46,12 +46,12 @@ def train_epoch(args, epoch, model, data_loader, optimizer, using_noise_mask=Fal
         augment_config = {
             'flip': random.choice([True, False]),
             'flip_horizontal': True,
-            # 'translate': random.choice([True, False]),
-            'translate': False,
-            'translate_max': 8,
+            'translate': random.choice([True, False]),
+            # 'translate': False,
+            'translate_max': 3,
             'affine': True,
             'affine_rot': 3.0,
-            'affine_scale': 0.0,
+            'affine_scale': 0.03,
             'affine_shear': 0.0
         }
         # Apply augmentation with probability p_aug
