@@ -18,8 +18,7 @@ from fastmri.data.transforms import batched_mask_center, center_crop
 from fastmri.fftc import fft2c_new as fft2c
 from fastmri.fftc import ifft2c_new as ifft2c
 from fastmri.math import complex_abs, complex_conj, complex_mul
-from utils.common.utils import center_crop
-
+from utils.common.utils import center_crop as center_crop_3
 
 def image_crop(image: Tensor, crop_size: Optional[Tuple[int, int]] = None) -> Tensor:
     if crop_size is None:
@@ -1141,7 +1140,7 @@ class FeatureVarNet_sh_w(nn.Module):
             complex_abs(ifft2c(kspace_pred)), dim=1
         )  # Ensure kspace_pred is a Tensor
 
-        return center_crop(img, 384, 384)
+        return center_crop_3(img, 384, 384)
 
 
 class FeatureVarNet_n_sh_w(nn.Module):

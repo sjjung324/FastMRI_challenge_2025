@@ -32,11 +32,6 @@ def parse():
     parser.add_argument('--pools_knee', type=int, default=4, help='Number of pooling layers for cascade U-Net | 4 in original varnet')
     parser.add_argument('--sens_pools_knee', type=int, default=4, help='Number of pooling layers for sensitivity map U-Net | 4 in original varnet')
 
-    # classifier, brain varnet, knee varnet 경로 인자
-    parser.add_argument('--classifier_path', type=Path, required=True, help='Path to classifier model (.pt)')
-    parser.add_argument('--brain_varnet_path', type=Path, required=True, help='Path to brain Varnet model (.pt)')
-    parser.add_argument('--knee_varnet_path', type=Path, required=True, help='Path to knee Varnet model (.pt)')
-
     args = parser.parse_args()
     return args
 
