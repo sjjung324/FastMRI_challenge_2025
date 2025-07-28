@@ -7,6 +7,7 @@ LICENSE file in the root directory of this source tree.
 
 import math
 from typing import List, NamedTuple, Optional, Tuple
+import numpy as np
 
 import torch
 import torch.nn as nn
@@ -18,7 +19,34 @@ from fastmri.data.transforms import batched_mask_center, center_crop
 from fastmri.fftc import fft2c_new as fft2c
 from fastmri.fftc import ifft2c_new as ifft2c
 from fastmri.math import complex_abs, complex_conj, complex_mul
-from utils.common.utils import center_crop as center_crop_3
+
+def center_crop_3(data, height, width):
+    # Convert to PyTorch tensor and move to device
+    device = torch.device('cuda') if torch.cuda.is_available() else 'cpu'
+    if isinstance(data, np.ndarray):
+        data = torch.from_numpy(data)
+    data = data.to(device)
+
+    _, h, w = data.shape
+
+    # Height padding
+    if h < height:
+        pad_h1 = (height - h) // 2
+        pad_h2 = (height - h) - pad_h1
+        data = torch.nn.functional.pad(data, (0, 0, pad_h1, pad_h2), mode='constant', value=0)
+        h = height
+
+    # Width padding
+    if w < width:
+        pad_w1 = (width - w) // 2
+        pad_w2 = (width - w) - pad_w1
+        data = torch.nn.functional.pad(data, (pad_w1, pad_w2, 0, 0), mode='constant', value=0)
+        w = width
+
+    start_h = (h - height) // 2
+    start_w = (w - width) // 2
+    return data[:, start_h:start_h + height, start_w:start_w + width]
+
 
 def image_crop(image: Tensor, crop_size: Optional[Tuple[int, int]] = None) -> Tensor:
     if crop_size is None:

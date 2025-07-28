@@ -66,4 +66,5 @@ if __name__ == '__main__':
 
     # 모델 저장
     moe_model_path = Path('../result') / args.net_name / 'best_model.pt'
+    moe_model_path.parent.mkdir(parents=True, exist_ok=True)
     torch.save({'model': moe_model.state_dict()}, moe_model_path)
