@@ -7,7 +7,7 @@ from pathlib import Path
 import copy
 import cv2
 import random
-from torch.amp import GradScaler, autocast
+# from torch.amp import GradScaler, autocast
 import os
 
 from collections import defaultdict
@@ -59,16 +59,16 @@ def train_epoch(args, epoch, model, data_loader, optimizer, using_noise_mask=Fal
             kspace, target = augment_kspace(kspace, augment_config)
 
 
-        with autocast(dtype=torch.bfloat16, device_type='cuda'):
-            output = model(kspace, mask)
-        # output = model(kspace, mask)
+        # with autocast(dtype=torch.bfloat16, device_type='cuda'):
+        #     output = model(kspace, mask)
+        output = model(kspace, mask)
 
         if using_noise_mask:
             target, output = apply_mask_to_target_and_reconstruction(target, output, modality=args.modality)
 
-        with autocast(dtype=torch.bfloat16, device_type='cuda'):
-            loss = alpha * SSIM_loss(output, target, maximum) + (1 - alpha) * L1_loss(output, target, maximum)
-        # loss = alpha * SSIM_loss(output, target, maximum) + (1 - alpha) * L1_loss(output, target, maximum)
+        # with autocast(dtype=torch.bfloat16, device_type='cuda'):
+        #     loss = alpha * SSIM_loss(output, target, maximum) + (1 - alpha) * L1_loss(output, target, maximum)
+        loss = alpha * SSIM_loss(output, target, maximum) + (1 - alpha) * L1_loss(output, target, maximum)
 
         
         optimizer.zero_grad()
