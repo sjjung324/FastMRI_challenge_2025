@@ -56,8 +56,7 @@ def train_epoch(args, epoch, model, data_loader, optimizer, using_noise_mask=Fal
         }
         # Apply augmentation with probability p_aug
         if using_augmentation and random.random() < p_aug:
-            kspace, target = augment_kspace(kspace, augment_config)
-
+            kspace, target = augment_kspace(kspace, target, augment_config)
 
         # with autocast(dtype=torch.bfloat16, device_type='cuda'):
         #     output = model(kspace, mask)
