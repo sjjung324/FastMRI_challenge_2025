@@ -1,8 +1,11 @@
 import torch
 import torch.nn as nn
-from utils.model.feature_varnet import FeatureVarNet_sh_w as VarNet
+from feature_varnet import FeatureVarNet_sh_w as VarNet
 from simple_classifier import SimpleClassifier
 from acc_classifier import acc_classifier
+from utils.common.utils import center_crop
+from utils.model.fastmri import fft2c, ifft2c
+
 
 class MoEModel(nn.Module):
     def __init__(self, brain_model_acc4_args, brain_model_acc8_args, knee_model_acc4_args, knee_model_acc8_args):
@@ -44,6 +47,14 @@ class MoEModel(nn.Module):
         logits = self.classifier(input_img)
         choice = torch.argmax(logits, dim=1)        # 0: brain, 1: knee
         acc = self.acc_classifier(masked_kspace)    # 4 or 8
+
+        img = ifft2c(masked_kspace) # (1, C, H, W, 2)
+        _, C, H, W, _ = img.shape
+        x = img.permute(0,1,4,2,3).contiguous().view(-1, H, W) # (B, H, W)
+        img = center_crop(x, 384, 384) # (B, 384, 384)
+        img = center_crop(x, H, W) # (B, H, W)
+        img = img.view(1, C, 2, H, W).permute(0, 1, 3, 4, 2).contiguous() # (1, C, H, W, 2)
+        masked_kspace = fft2c(img) # (1, C, H, W, 2)
 
         if choice.item() == 0:
             out = self.brain_net_acc4(masked_kspace, mask) if acc == 4 else self.brain_net_acc8(masked_kspace, mask)
