@@ -18,7 +18,7 @@ from utils.common.loss_function import SSIMLoss, L1Loss
 from utils.model.feature_varnet import FeatureVarNet_sh_w as VarNet
 from utils.data.augmentation import augment_kspace
 
-def train_epoch(args, epoch, model, data_loader, optimizer, using_noise_mask=False, using_augmentation=False, scaler=None):
+def train_epoch(args, epoch, model, data_loader, optimizer, using_noise_mask=False, using_augmentation=False, scaler=None, augmented_loader=None):
     device = torch.device(f'cuda:{args.GPU_NUM}' if torch.cuda.is_available() else 'cpu')
     model.train()
     start_epoch = start_iter = time.perf_counter()
@@ -36,6 +36,9 @@ def train_epoch(args, epoch, model, data_loader, optimizer, using_noise_mask=Fal
     L1_loss = L1Loss().to(device=device)
     SSIM_loss = SSIMLoss().to(device=device)
 
+    if using_augmentation and epoch > args.num_epochs:
+        data_loader = augmented_loader
+
     for iter, data in enumerate(data_loader):
         mask, kspace, _, target, maximum, _, _ = data
         mask = mask.cuda(non_blocking=True)
@@ -43,20 +46,20 @@ def train_epoch(args, epoch, model, data_loader, optimizer, using_noise_mask=Fal
         target = target.cuda(non_blocking=True)
         maximum = maximum.cuda(non_blocking=True)
 
-        augment_config = {
-            'flip': random.choice([True, False]),
-            'flip_horizontal': True,
-            'translate': random.choice([True, False]),
-            # 'translate': False,
-            'translate_max': 3,
-            'affine': True,
-            'affine_rot': 3.0,
-            'affine_scale': 0.03,
-            'affine_shear': 0.0
-        }
-        # Apply augmentation with probability p_aug
-        if using_augmentation and random.random() < p_aug:
-            kspace, target = augment_kspace(kspace, target, augment_config)
+        # augment_config = {
+        #     'flip': random.choice([True, False]),
+        #     'flip_horizontal': True,
+        #     'translate': random.choice([True, False]),
+        #     # 'translate': False,
+        #     'translate_max': 3,
+        #     'affine': True,
+        #     'affine_rot': 3.0,
+        #     'affine_scale': 0.03,
+        #     'affine_shear': 0.0
+        # }
+        # # Apply augmentation with probability p_aug
+        # if using_augmentation and random.random() < p_aug:
+        #     kspace, target = augment_kspace(kspace, target, augment_config)
 
         # with autocast(dtype=torch.bfloat16, device_type='cuda'):
         #     output = model(kspace, mask)
@@ -259,6 +262,7 @@ def train(args):
     
     train_loader = create_data_loaders(data_path = args.data_path_train, args = args, shuffle=True)
     val_loader = create_data_loaders(data_path = args.data_path_val, args = args, shuffle=False)
+    augmented_train_loader = create_data_loaders(data_path = args.data_path_train, args = args, shuffle=True, kspace_augment=True)
     
     val_loss_log = np.empty((0, 2))
     train_loss_log = np.empty((0, 2))
@@ -266,7 +270,7 @@ def train(args):
     for epoch in range(start_epoch, num_epochs + 1):
         print(f'Epoch #{epoch:2d} ............... {args.net_name} ...............')
 
-        train_loss, train_time = train_epoch(args, epoch, model, train_loader, optimizer, args.using_noise_mask, using_augmentation=(epoch > args.num_epochs), scaler=scaler)
+        train_loss, train_time = train_epoch(args, epoch, model, train_loader, optimizer, args.using_noise_mask, using_augmentation=(epoch > args.num_epochs), scaler=scaler, augmented_loader=augmented_train_loader)
         if args.validate_on_gpu:
             val_loss, num_subjects, reconstructions, targets, inputs, val_time = validate_on_gpu(args, model, val_loader, args.using_noise_mask)
         else:

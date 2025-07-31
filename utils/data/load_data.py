@@ -6,7 +6,7 @@ from pathlib import Path
 import numpy as np
 
 class SliceData(Dataset):
-    def __init__(self, root, transform, input_key, input_img_key, target_key, forward=False, modality='all', acc=0):
+    def __init__(self, root, transform, input_key, input_img_key, target_key, forward=False, modality='all', acc=0, kspace_augment=False):
         self.transform = transform
         self.input_key = input_key
         self.input_img_key = input_img_key
@@ -14,6 +14,8 @@ class SliceData(Dataset):
         self.forward = forward
         self.image_examples = []
         self.kspace_examples = []
+        self.kspace_augment = kspace_augment
+        self.acc = acc
 
         if modality not in ['all', 'brain', 'knee']:
             raise ValueError(f"Invalid modality '{modality}'. Choose from 'all', 'brain', or 'knee'.")
@@ -83,10 +85,10 @@ class SliceData(Dataset):
                 target = hf[self.target_key][dataslice]
                 attrs = dict(hf.attrs)
 
-        return self.transform(mask, input, input_img, target, attrs, kspace_fname.name, dataslice)
+        return self.transform(mask, input, input_img, target, attrs, kspace_fname.name, dataslice, self.kspace_augment, self.acc)
 
 
-def create_data_loaders(data_path, args, shuffle=False, isforward=False):
+def create_data_loaders(data_path, args, shuffle=False, isforward=False, kspace_augment=False):
     if isforward == False:
         max_key_ = args.max_key
         target_key_ = args.target_key
@@ -101,7 +103,8 @@ def create_data_loaders(data_path, args, shuffle=False, isforward=False):
         target_key=target_key_,
         forward=isforward,
         modality=getattr(args, 'modality', 'all'),
-        acc= getattr(args, 'acc', 0)
+        acc= getattr(args, 'acc', 0),
+        kspace_augment=kspace_augment
     )
 
     data_loader = DataLoader(
