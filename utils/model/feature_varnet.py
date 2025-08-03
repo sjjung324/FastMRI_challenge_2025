@@ -1149,59 +1149,75 @@ class FeatureVarNet_sh_w(nn.Module):
         num_low_frequencies: Optional[int] = None,
         crop_size: Optional[Tuple[int, int]] = None,
     ) -> Tensor:
+
+        # ─── 0. 프리프로세스 ───────────────────────────────────────────
         masked_kspace = masked_kspace * self.kspace_mult_factor
-        # Encode to features and get sensitivities
-        feature_image = self._encode_input(
+
+        fi = self._encode_input(
             masked_kspace=masked_kspace,
             mask=mask,
             crop_size=crop_size,
             num_low_frequencies=num_low_frequencies,
         )
-        # Do DC in feature-space
-        # Gradient checkpointing for memory optimization
-        # checkpoint로 감싸는 함수의 입력/출력을 모두 Tensor로 분해하여 전달
-        features = feature_image.features
-        sens_maps = feature_image.sens_maps
-        crop_size = feature_image.crop_size if feature_image.crop_size is not None else torch.tensor([-1, -1], device=features.device)
-        means = feature_image.means if feature_image.means is not None else torch.tensor([], device=features.device)
-        variances = feature_image.variances if feature_image.variances is not None else torch.tensor([], device=features.device)
-        ref_kspace = feature_image.ref_kspace if feature_image.ref_kspace is not None else torch.tensor([], device=features.device)
-        mask = feature_image.mask if feature_image.mask is not None else torch.tensor([], device=features.device)
 
-        for block in self.cascades:
-            def block_forward(features, sens_maps, crop_size, means, variances, ref_kspace, mask):
-                fi = FeatureImage(
-                    features=features,
-                    sens_maps=sens_maps,
-                    crop_size=None if (crop_size == torch.tensor([-1, -1], device=features.device)).all() else tuple(crop_size.tolist()),
-                    means=means if means.numel() > 0 else None,
-                    variances=variances if variances.numel() > 0 else None,
-                    ref_kspace=ref_kspace if ref_kspace.numel() > 0 else None,
-                    mask=mask if mask.numel() > 0 else None,
+        # 고정값은 클로저에 캡처
+        crop_size_const   = fi.crop_size
+        ref_kspace_const  = fi.ref_kspace
+        mask_const        = fi.mask
+
+        # 변하는 텐서들
+        feat   = fi.features          # (B, C, H, W)
+        smaps  = fi.sens_maps         # (B, Nc, H, W)
+        means  = fi.means             # (B, 1, 1, 1)
+        vars_  = fi.variances         # (B, 1, 1, 1)
+
+        # ─── 1. Cascades with gradient-checkpoint ─────────────────────
+        for blk in self.cascades:
+
+            def blk_cp(feat, smaps, means, vars_,
+                    blk=blk,                      # ★ 값 캡처
+                    cs=crop_size_const,
+                    rk=ref_kspace_const,
+                    ms=mask_const):
+                """한 cascade forward; Tensor만 입·출력"""
+                fi_local = FeatureImage(
+                    features   = feat,
+                    sens_maps  = smaps,
+                    crop_size  = cs,
+                    means      = means,
+                    variances  = vars_,
+                    ref_kspace = rk,
+                    mask       = ms,
                 )
-                out_fi = block(fi)
-                return out_fi.features, sens_maps, crop_size, means, variances, ref_kspace, mask
-            features, sens_maps, crop_size, means, variances, ref_kspace, mask = checkpoint.checkpoint(
-                block_forward, features, sens_maps, crop_size, means, variances, ref_kspace, mask
+                fo = blk(fi_local)                  # cascade 실행
+                # 업데이트된 네 텐서 반환
+                return (fo.features,
+                        fo.sens_maps,
+                        fo.means,
+                        fo.variances)
+
+            # checkpoint 적용
+            feat, smaps, means, vars_ = checkpoint.checkpoint(
+                blk_cp,
+                feat.requires_grad_(),     # 최소 하나는 grad 필요
+                smaps,
+                means,
+                vars_,
             )
-        feature_image = FeatureImage(
-            features=features,
-            sens_maps=sens_maps,
-            crop_size=None if (crop_size == torch.tensor([-1, -1], device=features.device)).all() else tuple(crop_size.tolist()),
-            means=means if means.numel() > 0 else None,
-            variances=variances if variances.numel() > 0 else None,
-            ref_kspace=ref_kspace if ref_kspace.numel() > 0 else None,
-            mask=mask if mask.numel() > 0 else None,
+
+        # ─── 2. Decode & image domain 변환 ────────────────────────────
+        fi_out = FeatureImage(
+            features   = feat,
+            sens_maps  = smaps,
+            crop_size  = crop_size_const,
+            means      = means,
+            variances  = vars_,
+            ref_kspace = ref_kspace_const,
+            mask       = mask_const,
         )
-        # Find last k-space
-        kspace_pred = self._decode_output(feature_image)
-        # Return Final Image
-        kspace_pred = (
-            kspace_pred / self.kspace_mult_factor
-        )  # Ensure kspace_pred is a Tensor
-        img = rss(
-            complex_abs(ifft2c(kspace_pred)), dim=1
-        )  # Ensure kspace_pred is a Tensor
+
+        kspace_pred = self._decode_output(fi_out) / self.kspace_mult_factor
+        img = rss(complex_abs(ifft2c(kspace_pred)), dim=1)
 
         return center_crop_3(img, 384, 384)
 
