@@ -251,7 +251,12 @@ def train(args):
     num_params = sum(p.numel() for p in model.parameters())
     print(f"Total number of model parameters: {num_params}")
 
-    optimizer = torch.optim.AdamW(model.parameters(), args.lr, weight_decay=1e-6)
+    # 모델 용량 출력
+    model_size = sum(p.numel() * p.element_size() for p in model.parameters()) / (1024 ** 2)  # in MB
+    print(f"Model size: {model_size:.2f} MB")
+
+    base_lr = args.lr
+    optimizer = torch.optim.AdamW(model.parameters(), base_lr, weight_decay=1e-6)
     # scaler = GradScaler()
     scaler = None
 
@@ -269,6 +274,14 @@ def train(args):
     num_epochs = args.num_epochs + args.num_aug_epochs
     for epoch in range(start_epoch, num_epochs + 1):
         print(f'Epoch #{epoch:2d} ............... {args.net_name} ...............')
+
+        # Adjust learning rate for augmentation epochs
+        if epoch > args.num_epochs:
+            for param_group in optimizer.param_groups:
+                param_group['lr'] = base_lr * 0.5
+        else:
+            for param_group in optimizer.param_groups:
+                param_group['lr'] = base_lr
 
         train_loss, train_time = train_epoch(args, epoch, model, train_loader, optimizer, args.using_noise_mask, using_augmentation=(epoch > args.num_epochs), scaler=scaler, augmented_loader=augmented_train_loader)
         if args.validate_on_gpu:
