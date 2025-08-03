@@ -12,6 +12,7 @@ import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+import torch.utils.checkpoint as checkpoint
 from torch import Tensor
 
 from fastmri.coil_combine import rss, rss_complex
@@ -1157,7 +1158,41 @@ class FeatureVarNet_sh_w(nn.Module):
             num_low_frequencies=num_low_frequencies,
         )
         # Do DC in feature-space
-        feature_image = self.cascades(feature_image)
+        # Gradient checkpointing for memory optimization
+        # checkpoint로 감싸는 함수의 입력/출력을 모두 Tensor로 분해하여 전달
+        features = feature_image.features
+        sens_maps = feature_image.sens_maps
+        crop_size = feature_image.crop_size if feature_image.crop_size is not None else torch.tensor([-1, -1], device=features.device)
+        means = feature_image.means if feature_image.means is not None else torch.tensor([], device=features.device)
+        variances = feature_image.variances if feature_image.variances is not None else torch.tensor([], device=features.device)
+        ref_kspace = feature_image.ref_kspace if feature_image.ref_kspace is not None else torch.tensor([], device=features.device)
+        mask = feature_image.mask if feature_image.mask is not None else torch.tensor([], device=features.device)
+
+        for block in self.cascades:
+            def block_forward(features, sens_maps, crop_size, means, variances, ref_kspace, mask):
+                fi = FeatureImage(
+                    features=features,
+                    sens_maps=sens_maps,
+                    crop_size=None if (crop_size == torch.tensor([-1, -1], device=features.device)).all() else tuple(crop_size.tolist()),
+                    means=means if means.numel() > 0 else None,
+                    variances=variances if variances.numel() > 0 else None,
+                    ref_kspace=ref_kspace if ref_kspace.numel() > 0 else None,
+                    mask=mask if mask.numel() > 0 else None,
+                )
+                out_fi = block(fi)
+                return out_fi.features, sens_maps, crop_size, means, variances, ref_kspace, mask
+            features, sens_maps, crop_size, means, variances, ref_kspace, mask = checkpoint.checkpoint(
+                block_forward, features, sens_maps, crop_size, means, variances, ref_kspace, mask
+            )
+        feature_image = FeatureImage(
+            features=features,
+            sens_maps=sens_maps,
+            crop_size=None if (crop_size == torch.tensor([-1, -1], device=features.device)).all() else tuple(crop_size.tolist()),
+            means=means if means.numel() > 0 else None,
+            variances=variances if variances.numel() > 0 else None,
+            ref_kspace=ref_kspace if ref_kspace.numel() > 0 else None,
+            mask=mask if mask.numel() > 0 else None,
+        )
         # Find last k-space
         kspace_pred = self._decode_output(feature_image)
         # Return Final Image
