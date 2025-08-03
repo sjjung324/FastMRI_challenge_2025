@@ -70,7 +70,7 @@ def train_epoch(args, epoch, model, data_loader, optimizer, using_noise_mask=Fal
 
         # with autocast(dtype=torch.bfloat16, device_type='cuda'):
         #     loss = alpha * SSIM_loss(output, target, maximum) + (1 - alpha) * L1_loss(output, target, maximum)
-        loss = alpha * SSIM_loss(output, target, maximum) + (1 - alpha) * L1_loss(output, target, maximum)
+        loss = alpha * SSIM_loss(output, target, maximum) + (1 - alpha) * L1_loss(output, target, maximum) * 10**4
 
         
         optimizer.zero_grad()

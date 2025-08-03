@@ -5,7 +5,9 @@ import random
 import glob
 import os
 import torch
-from utils.common.loss_function import SSIMLoss
+from utils.common.loss_function import SSIMLoss, L1Loss
+
+
 import torch.nn.functional as F
 import cv2 
 from pathlib import Path
@@ -65,8 +67,10 @@ def forward(args):
         test_parts = [f'{args.modality}_test']
     
     ssim_total = 0
+    l1_total = 0
     idx = 0
     ssim_calculator = SSIM().to(device=device)
+    l1_calculator = L1Loss().to(device=device)
     with torch.no_grad():
         for part in test_parts:
             for i_subject in range(29):
@@ -97,9 +101,9 @@ def forward(args):
                         recon = torch.from_numpy(recon).to(device=device)
                         
                     ssim_total += ssim_calculator(recon*mask, target*mask, maximum).cpu().numpy()
+                    l1_total += l1_calculator(recon*mask, target*mask, maximum).cpu().numpy()
                     idx += 1
-            
-    return ssim_total/idx
+    return ssim_total/idx, l1_total/idx
 
 
 if __name__ == '__main__':
@@ -129,14 +133,19 @@ if __name__ == '__main__':
     # acc4
     args.leaderboard_data_path = args.path_leaderboard_data / "acc4" / 'image'
     args.your_data_path = args.path_your_data / "acc4"
-    SSIM_acc4 = forward(args)
-    
+    SSIM_acc4, L1_acc4 = forward(args)
+    L1_acc4 = L1_acc4 * 10**4
+
     # acc8
     args.leaderboard_data_path = args.path_leaderboard_data / "acc8" / 'image'
     args.your_data_path = args.path_your_data / "acc8"
-    SSIM_acc8 = forward(args)
-    
+    SSIM_acc8, L1_acc8 = forward(args)
+    L1_acc8 = L1_acc8 * 10**4
+
     print("Leaderboard SSIM : {:.4f}".format((SSIM_acc4 + SSIM_acc8) / 2))
+    print("Leaderboard L1   : {:.6f}".format((L1_acc4 + L1_acc8) / 2))
     print("="*10 + " Details " + "="*10)
     print("Leaderboard SSIM (acc4): {:.4f}".format(SSIM_acc4))
     print("Leaderboard SSIM (acc8): {:.4f}".format(SSIM_acc8))
+    print("Leaderboard L1   (acc4): {:.6f}".format(L1_acc4))
+    print("Leaderboard L1   (acc8): {:.6f}".format(L1_acc8))
