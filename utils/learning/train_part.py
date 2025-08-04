@@ -238,12 +238,32 @@ def train(args):
                    sens_chans=args.sens_chans,
                    sens_pools=args.sens_pools,
                    pools=args.pools)
+    
+    val_loss_log = np.empty((0, 2))
+    train_loss_log = np.empty((0, 2))
+    lr_log = np.empty((0, 2))
+
     if args.pretrained_model_path is not None:
         model_ckpt = torch.load(args.pretrained_model_path, map_location=device, weights_only=False)
         if 'model' in model_ckpt:
             model.load_state_dict(model_ckpt['model'])
         else:
             model.load_state_dict(model_ckpt)
+
+    if args.resume:
+        if os.path.exists(args.exp_dir / 'model.pt'):
+            model_ckpt = torch.load(args.exp_dir / 'model.pt', map_location=device, weights_only=False)
+            if 'model' in model_ckpt:
+                model.load_state_dict(model_ckpt['model'])
+            else:
+                model.load_state_dict(model_ckpt)
+
+        if os.path.exists(args.exp_dir / 'lr_log.npy'):
+            lr_log = np.load(args.exp_dir / 'lr_log.npy')
+        if os.path.exists(args.exp_dir / 'train_loss_log.npy'):
+            train_loss_log = np.load(args.exp_dir / 'train_loss_log.npy')
+        if os.path.exists(args.exp_dir / 'val_loss_log.npy'):
+            val_loss_log = np.load(args.exp_dir / 'val_loss_log.npy')
 
     model.to(device=device)
 
@@ -257,8 +277,7 @@ def train(args):
 
     base_lr = args.lr
     optimizer = torch.optim.AdamW(model.parameters(), base_lr, weight_decay=1e-6)
-    # scaler = GradScaler()
-    scaler = None
+    scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', factor=0.5, patience=4, threshold=1e-4, threshold_mode='abs', cooldown=0, min_lr=1e-6, verbose=True)
 
     best_val_loss = 1.
     start_epoch = 1
@@ -269,8 +288,6 @@ def train(args):
     val_loader = create_data_loaders(data_path = args.data_path_val, args = args, shuffle=False)
     augmented_train_loader = create_data_loaders(data_path = args.data_path_train, args = args, shuffle=True, kspace_augment=True)
     
-    val_loss_log = np.empty((0, 2))
-    train_loss_log = np.empty((0, 2))
     num_epochs = args.num_epochs + args.num_aug_epochs
     for epoch in range(start_epoch, num_epochs + 1):
         print(f'Epoch #{epoch:2d} ............... {args.net_name} ...............')
@@ -283,20 +300,25 @@ def train(args):
             for param_group in optimizer.param_groups:
                 param_group['lr'] = base_lr
 
-        train_loss, train_time = train_epoch(args, epoch, model, train_loader, optimizer, args.using_noise_mask, using_augmentation=(epoch > args.num_epochs), scaler=scaler, augmented_loader=augmented_train_loader)
+        train_loss, train_time = train_epoch(args, epoch, model, train_loader, optimizer, args.using_noise_mask, using_augmentation=(epoch > args.num_epochs), augmented_loader=augmented_train_loader)
         if args.validate_on_gpu:
             val_loss, num_subjects, reconstructions, targets, inputs, val_time = validate_on_gpu(args, model, val_loader, args.using_noise_mask)
         else:
             val_loss, num_subjects, reconstructions, targets, inputs, val_time = validate(args, model, val_loader, args.using_noise_mask)
         
+        scheduler.step(val_loss / num_subjects)
+
+        lr_log = np.append(lr_log, np.array([[epoch, optimizer.param_groups[0]['lr']]]), axis=0)
         train_loss_log = np.append(train_loss_log, np.array([[epoch, train_loss]]), axis=0)
         val_loss_log = np.append(val_loss_log, np.array([[epoch, val_loss / num_subjects]]), axis=0)
 
-        trian_los_file_path = os.path.join(args.val_loss_dir, "train_loss_log")
-        np.save(trian_los_file_path, train_loss_log)
-        val_los_file_path = os.path.join(args.val_loss_dir, "val_loss_log")
-        np.save(val_los_file_path, val_loss_log)
-        print(f"loss file saved! {val_los_file_path}")
+        lr_log_file_path = os.path.join(args.val_loss_dir, "lr_log")
+        np.save(lr_log_file_path, lr_log)
+        train_loss_file_path = os.path.join(args.val_loss_dir, "train_loss_log")
+        np.save(train_loss_file_path, train_loss_log)
+        val_loss_file_path = os.path.join(args.val_loss_dir, "val_loss_log")
+        np.save(val_loss_file_path, val_loss_log)
+        print(f"loss file saved! {val_loss_file_path}")
 
         train_loss = torch.tensor(train_loss).cuda(non_blocking=True)
         val_loss = torch.tensor(val_loss).cuda(non_blocking=True)
@@ -311,6 +333,7 @@ def train(args):
         print(
             f'Epoch = [{epoch:4d}/{num_epochs:4d}] TrainLoss = {train_loss:.4g} '
             f'ValLoss = {val_loss:.4g} TrainTime = {train_time:.4f}s ValTime = {val_time:.4f}s',
+            f'lr = {optimizer.param_groups[0]["lr"]:.6f}'
         )
 
         if is_new_best:
