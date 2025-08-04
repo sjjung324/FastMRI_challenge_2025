@@ -18,33 +18,19 @@ def parse():
     parser.add_argument("--input_key", type=str, default='kspace', help='Name of input key')
     parser.add_argument("--input_img_key", type=str, default='image_input', help='Name of input image key')
 
-    # Brain_acc4 Varnet parameters
-    parser.add_argument('--cascade_brain_acc4', type=int, default=1, help='Number of cascades | Should be less than 12')
-    parser.add_argument('--chans_brain_acc4', type=int, default=9, help='Number of channels for cascade U-Net')
-    parser.add_argument('--sens_chans_brain_acc4', type=int, default=4, help='Number of channels for sensitivity map U-Net')
-    parser.add_argument('--pools_brain_acc4', type=int, default=4, help='Number of pooling layers for cascade U-Net | 4 in original varnet')
-    parser.add_argument('--sens_pools_brain_acc4', type=int, default=4, help='Number of pooling layers for sensitivity map U-Net | 4 in original varnet')
+    # Brain Varnet parameters
+    parser.add_argument('--cascade_brain', type=int, default=1, help='Number of cascades | Should be less than 12')
+    parser.add_argument('--chans_brain', type=int, default=9, help='Number of channels for cascade U-Net')
+    parser.add_argument('--sens_chans_brain', type=int, default=4, help='Number of channels for sensitivity map U-Net')
+    parser.add_argument('--pools_brain', type=int, default=4, help='Number of pooling layers for cascade U-Net | 4 in original varnet')
+    parser.add_argument('--sens_pools_brain', type=int, default=4, help='Number of pooling layers for sensitivity map U-Net | 4 in original varnet')
 
-    # Brain_acc8 Varnet parameters
-    parser.add_argument('--cascade_brain_acc8', type=int, default=1, help='Number of cascades | Should be less than 12')
-    parser.add_argument('--chans_brain_acc8', type=int, default=9, help='Number of channels for cascade U-Net')
-    parser.add_argument('--sens_chans_brain_acc8', type=int, default=4, help='Number of channels for sensitivity map U-Net')
-    parser.add_argument('--pools_brain_acc8', type=int, default=4, help='Number of pooling layers for cascade U-Net | 4 in original varnet')
-    parser.add_argument('--sens_pools_brain_acc8', type=int, default=4, help='Number of pooling layers for sensitivity map U-Net | 4 in original varnet')
-
-    # Knee_acc4 Varnet parameters
-    parser.add_argument('--cascade_knee_acc4', type=int, default=1, help='Number of cascades | Should be less than 12')
-    parser.add_argument('--chans_knee_acc4', type=int, default=9, help='Number of channels for cascade U-Net')
-    parser.add_argument('--sens_chans_knee_acc4', type=int, default=4, help='Number of channels for sensitivity map U-Net')
-    parser.add_argument('--pools_knee_acc4', type=int, default=4, help='Number of pooling layers for cascade U-Net | 4 in original varnet')
-    parser.add_argument('--sens_pools_knee_acc4', type=int, default=4, help='Number of pooling layers for sensitivity map U-Net | 4 in original varnet')
-
-    # Knee_acc8 Varnet parameters
-    parser.add_argument('--cascade_knee_acc8', type=int, default=1, help='Number of cascades | Should be less than 12')
-    parser.add_argument('--chans_knee_acc8', type=int, default=9, help='Number of channels for cascade U-Net')
-    parser.add_argument('--sens_chans_knee_acc8', type=int, default=4, help='Number of channels for sensitivity map U-Net')
-    parser.add_argument('--pools_knee_acc8', type=int, default=4, help='Number of pooling layers for cascade U-Net | 4 in original varnet')
-    parser.add_argument('--sens_pools_knee_acc8', type=int, default=4, help='Number of pooling layers for sensitivity map U-Net | 4 in original varnet')
+    # Knee Varnet parameters
+    parser.add_argument('--cascade_knee', type=int, default=1, help='Number of cascades | Should be less than 12')
+    parser.add_argument('--chans_knee', type=int, default=9, help='Number of channels for cascade U-Net')
+    parser.add_argument('--sens_chans_knee', type=int, default=4, help='Number of channels for sensitivity map U-Net')
+    parser.add_argument('--pools_knee', type=int, default=4, help='Number of pooling layers for cascade U-Net | 4 in original varnet')
+    parser.add_argument('--sens_pools_knee', type=int, default=4, help='Number of pooling layers for sensitivity map U-Net | 4 in original varnet')
 
     args = parser.parse_args()
     return args
