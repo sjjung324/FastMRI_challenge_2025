@@ -36,20 +36,20 @@ def forward(args):
     # MoE 모델 로드
     # brain FeatureVarNet arguments
     brain_model_args = {
-        'num_cascades': args.cascade_brain_acc4,
-        'chans': args.chans_brain_acc4,
-        'sens_chans': args.sens_chans_brain_acc4,
-        'pools': args.pools_brain_acc4,
-        'sens_pools': args.sens_pools_brain_acc4
+        'num_cascades': args.cascade_brain,
+        'chans': args.chans_brain,
+        'sens_chans': args.sens_chans_brain,
+        'pools': args.pools_brain,
+        'sens_pools': args.sens_pools_brain
     }
 
     # knee FeatureVarNet arguments
     knee_model_args = {
-        'num_cascades': args.cascade_knee_acc4,
-        'chans': args.chans_knee_acc4,
-        'sens_chans': args.sens_chans_knee_acc4,
-        'pools': args.pools_knee_acc4,
-        'sens_pools': args.sens_pools_knee_acc4
+        'num_cascades': args.cascade_knee,
+        'chans': args.chans_knee,
+        'sens_chans': args.sens_chans_knee,
+        'pools': args.pools_knee,
+        'sens_pools': args.sens_pools_knee
     }
 
     moe_model = MoEModel(brain_model_args=brain_model_args, knee_model_args=knee_model_args)
