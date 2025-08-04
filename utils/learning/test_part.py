@@ -35,7 +35,7 @@ def forward(args):
 
     # MoE 모델 로드
     # brain FeatureVarNet arguments
-    brain_model_acc4_args = {
+    brain_model_args = {
         'num_cascades': args.cascade_brain_acc4,
         'chans': args.chans_brain_acc4,
         'sens_chans': args.sens_chans_brain_acc4,
@@ -43,16 +43,8 @@ def forward(args):
         'sens_pools': args.sens_pools_brain_acc4
     }
 
-    brain_model_acc8_args = {
-        'num_cascades': args.cascade_brain_acc8,
-        'chans': args.chans_brain_acc8,
-        'sens_chans': args.sens_chans_brain_acc8,
-        'pools': args.pools_brain_acc8,
-        'sens_pools': args.sens_pools_brain_acc8
-    }
-
     # knee FeatureVarNet arguments
-    knee_model_acc4_args = {
+    knee_model_args = {
         'num_cascades': args.cascade_knee_acc4,
         'chans': args.chans_knee_acc4,
         'sens_chans': args.sens_chans_knee_acc4,
@@ -60,16 +52,7 @@ def forward(args):
         'sens_pools': args.sens_pools_knee_acc4
     }
 
-    knee_model_acc8_args = {
-        'num_cascades': args.cascade_knee_acc8,
-        'chans': args.chans_knee_acc8,
-        'sens_chans': args.sens_chans_knee_acc8,
-        'pools': args.pools_knee_acc8,
-        'sens_pools': args.sens_pools_knee_acc8
-    }
-
-    moe_model = MoEModel(brain_model_acc4_args=brain_model_acc4_args, brain_model_acc8_args=brain_model_acc8_args,
-                         knee_model_acc4_args=knee_model_acc4_args, knee_model_acc8_args=knee_model_acc8_args)
+    moe_model = MoEModel(brain_model_args=brain_model_args, knee_model_args=knee_model_args)
     moe_model_path = Path('../result') / args.net_name / 'best_model.pt'
     moe_ckpt = torch.load(moe_model_path, map_location=device, weights_only=False)
     moe_model.load_state_dict(moe_ckpt['model'])
