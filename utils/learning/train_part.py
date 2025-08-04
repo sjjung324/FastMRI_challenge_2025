@@ -277,7 +277,7 @@ def train(args):
 
     base_lr = args.lr
     optimizer = torch.optim.AdamW(model.parameters(), base_lr, weight_decay=1e-6)
-    scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', factor=0.5, patience=4, threshold=3e-4, threshold_mode='abs', cooldown=1, min_lr=4e-5, verbose=True)
+    scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', factor=0.5, patience=4, threshold=3e-4, threshold_mode='abs', cooldown=1, min_lr=4e-5)
 
     best_val_loss = 1.
     start_epoch = 1
