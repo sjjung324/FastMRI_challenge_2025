@@ -1,0 +1,11 @@
+python utils/model/create_moe_model.py \
+  -n 'MoE_FeatureVarNet_12_18_8_12_18_8_0805' \
+  --cascade_brain 12 \
+  --chans_brain 18 \
+  --sens_chans_brain 8 \
+  --cascade_knee 12 \
+  --chans_knee 18 \
+  --sens_chans_knee 8 \
+  --classifier_path '../result/classifier/model.pt' \
+  --brain_varnet_path '../result/FeatureVarNet_12_18_8_brain_0803/checkpoints/best_model.pt' \
+  --knee_varnet_path '../result/FeatureVarNet_12_18_8_knee_0803/checkpoints/best_model.pt' 

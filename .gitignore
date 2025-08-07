@@ -2,6 +2,9 @@ venv
 venv_*
 env
 __pycache__
+
 *.sh
 **/*.sh
+!scripts/*.sh
+
 *.ipynb
