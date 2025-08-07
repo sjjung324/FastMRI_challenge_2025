@@ -257,13 +257,17 @@ def train(args):
                 model.load_state_dict(model_ckpt['model'])
             else:
                 model.load_state_dict(model_ckpt)
+            print(f"Model loaded from {args.exp_dir / 'model.pt'}")
 
-        if os.path.exists(args.exp_dir / 'lr_log.npy'):
-            lr_log = np.load(args.exp_dir / 'lr_log.npy')
-        if os.path.exists(args.exp_dir / 'train_loss_log.npy'):
-            train_loss_log = np.load(args.exp_dir / 'train_loss_log.npy')
-        if os.path.exists(args.exp_dir / 'val_loss_log.npy'):
-            val_loss_log = np.load(args.exp_dir / 'val_loss_log.npy')
+        if os.path.exists(args.val_loss_dir / 'lr_log.npy'):
+            lr_log = np.load(args.val_loss_dir / 'lr_log.npy')
+            print(f"lr_log loaded from {args.val_loss_dir / 'lr_log.npy'}")
+        if os.path.exists(args.val_loss_dir / 'train_loss_log.npy'):
+            train_loss_log = np.load(args.val_loss_dir / 'train_loss_log.npy')
+            print(f"train_loss_log loaded from {args.val_loss_dir / 'train_loss_log.npy'}")
+        if os.path.exists(args.val_loss_dir / 'val_loss_log.npy'):
+            val_loss_log = np.load(args.val_loss_dir / 'val_loss_log.npy')
+            print(f"val_loss_log loaded from {args.val_loss_dir / 'val_loss_log.npy'}")
 
     model.to(device=device)
 
