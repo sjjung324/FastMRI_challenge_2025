@@ -79,7 +79,7 @@ def train_epoch(args, epoch, model, data_loader, optimizer, using_noise_mask=Fal
         if (iter + 1) % accumulation_steps == 0 or (iter + 1) == len(data_loader):
             optimizer.step()
             optimizer.zero_grad()
-        total_loss += loss.item() * accumulation_steps
+        total_loss += loss.detach().item() * accumulation_steps
 
         if iter % args.report_interval == 0:
             print(
