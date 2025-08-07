@@ -292,14 +292,6 @@ def train(args):
     for epoch in range(start_epoch, num_epochs + 1):
         print(f'Epoch #{epoch:2d} ............... {args.net_name} ...............')
 
-        # Adjust learning rate for augmentation epochs
-        if epoch > args.num_epochs:
-            for param_group in optimizer.param_groups:
-                param_group['lr'] = base_lr * 0.5
-        else:
-            for param_group in optimizer.param_groups:
-                param_group['lr'] = base_lr
-
         train_loss, train_time = train_epoch(args, epoch, model, train_loader, optimizer, args.using_noise_mask, using_augmentation=(epoch > args.num_epochs), augmented_loader=augmented_train_loader)
         if args.validate_on_gpu:
             val_loss, num_subjects, reconstructions, targets, inputs, val_time = validate_on_gpu(args, model, val_loader, args.using_noise_mask)
