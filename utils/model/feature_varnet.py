@@ -370,16 +370,16 @@ class Unet(nn.Module):
 
         # apply down-sampling layers
         for layer in self.down_sample_layers:
-            output = layer(output)
+            output = checkpoint.checkpoint(layer, output)
             stack.append(output)
             output = F.avg_pool2d(output, kernel_size=2, stride=2, padding=0)
 
-        output = self.conv(output)
+        output = checkpoint.checkpoint(self.conv, output)
 
         # apply up-sampling layers
         for transpose_conv, conv in zip(self.up_transpose_conv, self.up_conv):
             downsample_layer = stack.pop()
-            output = transpose_conv(output)
+            output = checkpoint.checkpoint(transpose_conv, output)
 
             # reflect pad on the right/botton if needed to handle odd input dimensions
             padding = [0, 0, 0, 0]
@@ -391,7 +391,7 @@ class Unet(nn.Module):
                 output = F.pad(output, padding, "reflect")
 
             output = torch.cat([output, downsample_layer], dim=1)
-            output = conv(output)
+            output = checkpoint.checkpoint(conv, output)
 
         return output
 
@@ -464,7 +464,9 @@ class Unet2d(nn.Module):
 
     def forward(self, image: Tensor) -> Tensor:
         image, (output_y, output_x) = self.pad_input_image(image)
-        return self.final_conv(self.layer(image))[:, :, :output_y, :output_x]
+        output = checkpoint.checkpoint(self.layer, image)
+        output = checkpoint.checkpoint(self.final_conv, output)
+        return output[:, :, :output_y, :output_x]
 
 
 class UnetLevel(nn.Module):
