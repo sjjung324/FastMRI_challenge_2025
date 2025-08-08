@@ -570,13 +570,14 @@ class NormUnet(nn.Module):
 
         super().__init__()
 
-        self.unet = Unet(
+        unet = Unet(
             in_chans=in_chans,
             out_chans=out_chans,
             chans=chans,
             num_pool_layers=num_pools,
             drop_prob=drop_prob,
         )
+        self.unet = MemoryEfficientUnet(base_unet=unet)
 
     def complex_to_chan_dim(self, x: torch.Tensor) -> torch.Tensor:
         b, c, h, w, two = x.shape
@@ -1768,3 +1769,94 @@ class VarNetBlock(nn.Module):
         )
 
         return current_kspace - soft_dc - model_term
+
+
+def _cp_run(module: nn.Module, *args):
+    """checkpoint + save_on_cpu를 한 번에 적용하는 헬퍼."""
+    def _fn(*xx):
+        # with save_on_cpu(pin_memory=True):
+        return module(*xx)
+    return checkpoint.checkpoint(_fn, *args, use_reentrant=False, preserve_rng_state=True)
+
+class MemoryEfficientUnet(nn.Module):
+    """
+    원본 Unet을 감싸서:
+      - 인코더 스킵(feature)을 forward에서 저장하지 않음
+      - 디코더 각 단계 직전에 필요한 스킵만 '다시 계산'해서 즉시 사용/폐기
+      - 내부 호출은 checkpoint + save_on_cpu로 저장본을 CPU로 오프로딩
+    """
+    def __init__(self, base_unet: Unet, sv_cpu=False):
+        super().__init__()
+        self.base = base_unet
+        self.sv_cpu = sv_cpu
+        # 편의 단축
+        self.down_layers = self.base.down_sample_layers
+        self.up_tconvs  = self.base.up_transpose_conv
+        self.up_convs   = self.base.up_conv
+        self.bottom_conv= self.base.conv
+
+    def _encode_to_level(self, x0: torch.Tensor, level: int) -> torch.Tensor:
+        """
+        입력 x0에서 down_layer 0..level까지 실행 (level에서 'pool 이전 출력'을 반환).
+        원본 forward에서 스택에 쌓던 바로 그 텐서를 재현한다.
+        """
+        x = x0
+        for i, layer in enumerate(self.down_layers):
+            x = _cp_run(layer, x)  # ConvBlock
+            if i < level:
+                x = F.avg_pool2d(x, kernel_size=2, stride=2, padding=0)
+            else:
+                break
+        return x
+
+    def _run_to_bottom(self, x0: torch.Tensor) -> torch.Tensor:
+        """
+        인코더를 끝까지 내려가서 (마지막 down 이후 pool 포함) bottom_conv까지 수행.
+        (원본 forward에서 self.conv 입력과 동일한 텐서를 만들어 self.conv 적용)
+        """
+        x = x0
+        last_idx = len(self.down_layers) - 1
+        for i, layer in enumerate(self.down_layers):
+            x = _cp_run(layer, x)  # ConvBlock
+            # 원본은 매 레벨에서 append 후 항상 pool을 수행
+            x = F.avg_pool2d(x, kernel_size=2, stride=2, padding=0)
+        x = _cp_run(self.bottom_conv, x)
+        return x
+
+    def forward(self, image: torch.Tensor) -> torch.Tensor:
+        """
+        원본과 동일한 입/출력 형태를 유지.
+        - 스킵은 저장하지 않음
+        - 디코더 단계마다 필요한 스킵만 재계산
+        """
+        # 1) 보틀넥까지 (스킵 저장 X)
+        z = self._run_to_bottom(image)
+
+        # 2) 업패스: 각 단계 진입 직전에 해당 스킵을 재계산해서 concat
+        #    원본은 stack.pop() 순서로 L, L-1, ..., 0을 사용
+        L = len(self.down_layers) - 1          # 스킵 인덱스의 최댓값
+        level_iter = list(range(L, -1, -1))    # L, L-1, ..., 0
+
+        for (tconv, conv), level in zip(zip(self.up_tconvs, self.up_convs), level_iter):
+            # uptranspose
+            z = _cp_run(tconv, z)
+
+            # 재계산된 스킵
+            skip = self._encode_to_level(image, level)
+
+            # 원본과 동일한 패딩 로직
+            padding = [0, 0, 0, 0]
+            if z.shape[-1] != skip.shape[-1]:
+                padding[1] = 1  # right
+            if z.shape[-2] != skip.shape[-2]:
+                padding[3] = 1  # bottom
+            if (padding[1] | padding[3]) != 0:
+                z = F.pad(z, padding, "reflect")
+
+            z = torch.cat([z, skip], dim=1)
+            del skip  # 즉시 해제
+
+            # 업컨브 (마지막 단계는 ConvBlock + 1x1 conv 포함한 Sequential)
+            z = _cp_run(conv, z)
+
+        return z
