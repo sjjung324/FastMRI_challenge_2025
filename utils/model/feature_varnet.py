@@ -13,6 +13,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import torch.utils.checkpoint as checkpoint
+from torch.autograd.graph import save_on_cpu
 from torch import Tensor
 
 from fastmri.coil_combine import rss, rss_complex
@@ -1124,7 +1125,19 @@ class FeatureVarNet_sh_w(nn.Module):
         crop_size: Optional[Tuple[int, int]],
         num_low_frequencies: Optional[int],
     ) -> FeatureImage:
-        sens_maps = self.sens_net(masked_kspace, mask, num_low_frequencies)
+        # sens_maps = self.sens_net(masked_kspace, mask, num_low_frequencies)
+        # sens_maps = checkpoint.checkpoint(self.sens_net, masked_kspace, mask, num_low_frequencies)
+        def sens_fwd(mk, m):
+            with save_on_cpu(pin_memory=True):
+                return self.sens_net(mk, m, num_low_frequencies)
+        
+        dummy = torch.ones((), device=masked_kspace.device, requires_grad=True)
+        sens_maps = checkpoint.checkpoint(
+            lambda _d, mk, m: sens_fwd(mk, m),
+            dummy, masked_kspace, mask,
+            use_reentrant=False,  # 신버전이면 이게 안정적
+        )
+
         image = sens_reduce(masked_kspace, sens_maps)
         # detect FLAIR 203
         if crop_size is not None and image.shape[-1] < crop_size[1]:
@@ -1149,7 +1162,7 @@ class FeatureVarNet_sh_w(nn.Module):
         num_low_frequencies: Optional[int] = None,
         crop_size: Optional[Tuple[int, int]] = None,
     ) -> Tensor:
-
+        
         # ─── 0. 프리프로세스 ───────────────────────────────────────────
         masked_kspace = masked_kspace * self.kspace_mult_factor
 
@@ -1189,8 +1202,9 @@ class FeatureVarNet_sh_w(nn.Module):
                     ref_kspace = rk,
                     mask       = ms,
                 )
+                # with save_on_cpu(pin_memory=True):
                 fo = blk(fi_local)                  # cascade 실행
-                # 업데이트된 네 텐서 반환
+                    # 업데이트된 네 텐서 반환
                 return (fo.features,
                         fo.sens_maps,
                         fo.means,
@@ -1218,8 +1232,9 @@ class FeatureVarNet_sh_w(nn.Module):
 
         kspace_pred = self._decode_output(fi_out) / self.kspace_mult_factor
         img = rss(complex_abs(ifft2c(kspace_pred)), dim=1)
+        out = center_crop_3(img, 384, 384)
 
-        return center_crop_3(img, 384, 384)
+        return out
 
 
 class FeatureVarNet_n_sh_w(nn.Module):
@@ -1321,9 +1336,9 @@ class FeatureVarNet_n_sh_w(nn.Module):
         kspace_pred = (
             kspace_pred / self.kspace_mult_factor
         )  # Ensure kspace_pred is a Tensor
-        return rss(
+        return center_crop_3(rss(
             complex_abs(ifft2c(kspace_pred)), dim=1
-        )  # Ensure kspace_pred is a Tensor
+        ), 384, 384)  # Ensure kspace_pred is a Tensor
 
 
 class AttentionFeatureVarNet_n_sh_w(nn.Module):
@@ -1703,8 +1718,11 @@ class FeatureVarNetBlock(nn.Module):
         )
 
         if self.use_image_conv:
-            new_features = self.output_norm(new_features)
-            new_features = new_features + self.output_conv(new_features)
+            def apply_image_conv(feature):
+                feature = self.output_norm(feature)
+                feature = feature + self.output_conv(feature)
+                return feature
+            new_features = checkpoint.checkpoint(apply_image_conv, new_features)
 
         return feature_image._replace(features=new_features)
 
