@@ -566,6 +566,7 @@ class NormUnet(nn.Module):
         in_chans: int = 2,
         out_chans: int = 2,
         drop_prob: float = 0.0,
+        using_memory_efficient: bool = True
     ):
 
         super().__init__()
@@ -577,7 +578,10 @@ class NormUnet(nn.Module):
             num_pool_layers=num_pools,
             drop_prob=drop_prob,
         )
-        self.unet = MemoryEfficientUnet(base_unet=unet)
+        if using_memory_efficient:
+            self.unet = MemoryEfficientUnet(base_unet=unet)
+        else:
+            self.unet = unet
 
     def complex_to_chan_dim(self, x: torch.Tensor) -> torch.Tensor:
         b, c, h, w, two = x.shape
@@ -756,6 +760,7 @@ class SensitivityModel(nn.Module):
         out_chans: int = 2,
         drop_prob: float = 0.0,
         mask_center: bool = True,
+        using_memory_efficient: bool = True,
     ):
         """
         Args:
@@ -775,6 +780,7 @@ class SensitivityModel(nn.Module):
             in_chans=in_chans,
             out_chans=out_chans,
             drop_prob=drop_prob,
+            using_memory_efficient=using_memory_efficient
         )
 
     def chans_to_batch_dim(self, x: torch.Tensor) -> Tuple[torch.Tensor, int]:
@@ -1079,6 +1085,8 @@ class FeatureVarNet_sh_w(nn.Module):
         mask_center: bool = True,
         image_conv_cascades: Optional[List[int]] = None,
         kspace_mult_factor: float = 1e6,
+        using_memory_efficient: bool = True,
+        using_cpu_memory: bool = True,
     ):
         super().__init__()
         if image_conv_cascades is None:
@@ -1090,6 +1098,7 @@ class FeatureVarNet_sh_w(nn.Module):
             chans=sens_chans,
             num_pools=sens_pools,
             mask_center=mask_center,
+            using_memory_efficient=using_memory_efficient
         )
         self.encoder = FeatureEncoder(in_chans=2, feature_chans=chans)
         self.decoder = FeatureDecoder(feature_chans=chans, out_chans=2)
@@ -1110,6 +1119,7 @@ class FeatureVarNet_sh_w(nn.Module):
         self.decode_norm = nn.InstanceNorm2d(chans)
         self.cascades = nn.Sequential(*cascades)
         self.norm_fn = NormStats()
+        self.using_cpu_memory = using_cpu_memory
 
     def _decode_output(self, feature_image: FeatureImage) -> Tensor:
         image = self.decoder(
@@ -1129,7 +1139,10 @@ class FeatureVarNet_sh_w(nn.Module):
         # sens_maps = self.sens_net(masked_kspace, mask, num_low_frequencies)
         # sens_maps = checkpoint.checkpoint(self.sens_net, masked_kspace, mask, num_low_frequencies)
         def sens_fwd(mk, m):
-            with save_on_cpu(pin_memory=True):
+            if self.using_cpu_memory:
+                with save_on_cpu(pin_memory=True):
+                    return self.sens_net(mk, m, num_low_frequencies)
+            else:
                 return self.sens_net(mk, m, num_low_frequencies)
         
         dummy = torch.ones((), device=masked_kspace.device, requires_grad=True)

@@ -239,8 +239,11 @@ def train(args):
                    chans=args.chans, 
                    sens_chans=args.sens_chans,
                    sens_pools=args.sens_pools,
-                   pools=args.pools)
-    
+                   pools=args.pools,
+                   using_memory_efficient= not args.no_using_memory_efficient,
+                   using_cpu_memory=not args.no_using_cpu_memory
+                   )
+
     val_loss_log = np.empty((0, 2))
     train_loss_log = np.empty((0, 2))
     lr_log = np.empty((0, 2))

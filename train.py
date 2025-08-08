@@ -32,7 +32,9 @@ def parse():
     parser.add_argument('--pretrained-model-path', type=Path, default=None, help='Path to pretrained model checkpoint')
     parser.add_argument('--alpha', type=float, default=1.0, help='Weight for SSIM loss in the combined loss function')
     parser.add_argument('--resume', action='store_true', help='Resume training from the last checkpoint')
-    
+
+    parser.add_argument('--no-using-cpu-memory', action='store_true', help='Whether to use CPU memory for training')
+    parser.add_argument('--no-using-memory-efficient', action='store_true', help='Whether to use memory-efficient training')
     parser.add_argument('--cascade', type=int, default=10, help='Number of cascades | Should be less than 12') ## important hyperparameter
     parser.add_argument('--chans', type=int, default=18, help='Number of channels for cascade U-Net | 18 in original varnet') ## important hyperparameter
     parser.add_argument('--sens_chans', type=int, default=8, help='Number of channels for sensitivity map U-Net | 8 in original varnet') ## important hyperparameter
