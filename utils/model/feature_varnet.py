@@ -1860,3 +1860,110 @@ class MemoryEfficientUnet(nn.Module):
             z = _cp_run(conv, z)
 
         return z
+
+class RecomputeUnetLevel(nn.Module):
+    """
+    UnetLevel의 드롭인 교체.
+    - child가 있을 때 'left_block(image)'를 child 계산 동안 보관하지 않고,
+      child 완료 후 다시 left_block(image)를 '재계산'해 concat.
+    - 각 블록은 checkpoint + save_on_cpu로 저장 텐서를 CPU로 오프로딩.
+    """
+    def __init__(self, child: "RecomputeUnetLevel|None",
+                 in_planes: int, out_planes: int, drop_prob: float = 0.0):
+        super().__init__()
+        self.in_planes = in_planes
+        self.out_planes = out_planes
+
+        self.left_block = ConvBlock(in_chans=in_planes, out_chans=out_planes, drop_prob=drop_prob)
+        self.child = child
+
+        if child is not None:
+            self.downsample = nn.AvgPool2d(kernel_size=2, stride=2, padding=0)
+            if isinstance(child, RecomputeUnetLevel):
+                self.upsample = TransposeConvBlock(in_chans=child.out_planes, out_chans=out_planes)
+            else:
+                raise TypeError("Child must be an instance of RecomputeUnetLevel")
+
+            self.right_block = ConvBlock(in_chans=2 * out_planes, out_chans=out_planes, drop_prob=drop_prob)
+
+    def forward(self, image: torch.Tensor) -> torch.Tensor:
+        if self.child is None:
+            # 리프: 그냥 left_block만 (checkpoint+save_on_cpu)
+            return _cp_run(self.left_block, image)
+
+        # 1) child 입력을 만들기 위해 일시적으로 left를 '한 번' 계산 → 바로 다운샘플 → 버림
+        left_for_child = _cp_run(self.left_block, image)            # (보관하지 않음)
+        down = self.downsample(left_for_child)
+        del left_for_child
+
+        # 2) child 경로 (재귀적으로 동일 정책 적용)
+        child_out = self.child(down)
+        up = _cp_run(self.upsample, child_out)
+        del child_out
+
+        # 3) concat용 left를 '다시' 계산해서 즉시 사용
+        left_for_skip = _cp_run(self.left_block, image)
+
+        cat = torch.cat((left_for_skip, up), dim=1)
+        del left_for_skip, up
+
+        # 4) right_block 처리
+        out = _cp_run(self.right_block, cat)
+        return out
+
+
+class MemoryEfficientUnet2d(nn.Module):
+    """
+    Unet2d의 드롭인 교체.
+    - 내부 레벨을 RecomputeUnetLevel로 구성해 스킵을 저장하지 않음.
+    - pad_input_image / final_conv 인터페이스 동일 유지.
+    """
+    def __init__(self, in_chans: int, out_chans: int,
+                 chans: int = 32, num_pool_layers: int = 4,
+                 drop_prob: float = 0.0, output_bias: bool = False):
+        super().__init__()
+        self.in_chans = in_chans
+        self.out_planes = out_chans
+        self.factor = 2 ** num_pool_layers
+
+        # 원본과 동일: 가운데에서 바깥으로 구축(단, 레벨 타입만 RecomputeUnetLevel로 교체)
+        planes = 2 ** (num_pool_layers)
+        layer = None
+        for _ in range(num_pool_layers):
+            planes = planes // 2
+            layer = RecomputeUnetLevel(
+                child=layer,
+                in_planes=planes * chans,
+                out_planes=2 * planes * chans,
+                drop_prob=drop_prob,
+            )
+        self.layer = RecomputeUnetLevel(
+            child=layer, in_planes=in_chans, out_planes=chans, drop_prob=drop_prob
+        )
+
+        if output_bias:
+            self.final_conv = nn.Sequential(
+                nn.Conv2d(in_channels=chans, out_channels=out_chans, kernel_size=1, stride=1, padding=0, bias=True)
+            )
+        else:
+            self.final_conv = nn.Sequential(
+                nn.Conv2d(in_channels=chans, out_channels=out_chans, kernel_size=1, stride=1, padding=0, bias=False),
+                nn.InstanceNorm2d(out_chans),
+                nn.LeakyReLU(negative_slope=0.2, inplace=True),
+            )
+
+    def pad_input_image(self, image: torch.Tensor) -> tuple[torch.Tensor, tuple[int, int]]:
+        # 원본과 동일
+        _, _, height, width = image.shape
+        pad_height = (self.factor - (height - self.factor)) % self.factor
+        pad_width = (self.factor - (width - self.factor)) % self.factor
+        if pad_height != 0 or pad_width != 0:
+            image = F.pad(image, (0, pad_width, 0, pad_height), mode="reflect")
+        return image, (height, width)
+
+    def forward(self, image: torch.Tensor) -> torch.Tensor:
+        image, (H, W) = self.pad_input_image(image)
+        # 레벨/블록 내부는 이미 checkpoint+save_on_cpu 적용됨
+        out = _cp_run(self.layer, image)
+        out = _cp_run(self.final_conv, out)
+        return out[:, :, :H, :W]
