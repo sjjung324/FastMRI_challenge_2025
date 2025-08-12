@@ -239,19 +239,30 @@ def train(args):
                    chans=args.chans, 
                    sens_chans=args.sens_chans,
                    sens_pools=args.sens_pools,
-                   pools=args.pools,
-                   using_memory_efficient= not args.no_using_memory_efficient,
-                   using_cpu_memory=not args.no_using_cpu_memory
-                   )
+                   pools=args.pools)
 
+    base_lr = args.lr
+    optimizer = torch.optim.AdamW(model.parameters(), base_lr, weight_decay=1e-6)
+    scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', factor=0.5, patience=4, threshold=3e-4, threshold_mode='abs', cooldown=1, min_lr=4e-5)
+    
     val_loss_log = np.empty((0, 2))
     train_loss_log = np.empty((0, 2))
     lr_log = np.empty((0, 2))
 
     if args.pretrained_model_path is not None:
-        model_ckpt = torch.load(args.pretrained_model_path, map_location=device, weights_only=False)
+        model_ckpt = torch.load(args.pretrained_model_path, map_location='cpu', weights_only=False)
         if 'model' in model_ckpt:
             model.load_state_dict(model_ckpt['model'])
+            print("Pretrained Model Loaded")
+
+            if "optimizer" in model_ckpt:
+                optimizer.load_state_dict(model_ckpt["optimizer"])
+                for state in optimizer.state.values():
+                    for k, v in state.items():
+                        if torch.is_tensor(v):
+                            state[k] = v.to(device)
+                print("Optimizer state loaded.")
+        
         else:
             model.load_state_dict(model_ckpt)
 
@@ -283,10 +294,6 @@ def train(args):
     # 모델 용량 출력
     model_size = sum(p.numel() * p.element_size() for p in model.parameters()) / (1024 ** 2)  # in MB
     print(f"Model size: {model_size:.2f} MB")
-
-    base_lr = args.lr
-    optimizer = torch.optim.AdamW(model.parameters(), base_lr, weight_decay=1e-6)
-    scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', factor=0.5, patience=4, threshold=3e-4, threshold_mode='abs', cooldown=1, min_lr=4e-5)
 
     best_val_loss = 1.
     start_epoch = 1
