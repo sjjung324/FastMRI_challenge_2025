@@ -300,10 +300,10 @@ def train(args):
     start_epoch = 1
 
     
-    train_loader = create_data_loaders(data_path = args.data_path_train, args = args, shuffle=True)
-    val_loader = create_data_loaders(data_path = args.data_path_val, args = args, shuffle=False)
-    augmented_train_loader = create_data_loaders(data_path = args.data_path_train, args = args, shuffle=True, kspace_augment=True)
-    
+    train_loader = create_data_loaders(data_path = args.data_path_train, args = args, shuffle=True, additional_root=args.data_path_train_additional)
+    val_loader = create_data_loaders(data_path = args.data_path_val, args = args, shuffle=False, additional_root=args.data_path_val_additional)
+    augmented_train_loader = create_data_loaders(data_path = args.data_path_train, args = args, shuffle=True, kspace_augment=True, additional_root=args.data_path_train_additional)
+
     num_epochs = args.num_epochs + args.num_aug_epochs
     for epoch in range(start_epoch, num_epochs + 1):
         print(f'Epoch #{epoch:2d} ............... {args.net_name} ...............')

@@ -6,7 +6,7 @@ from pathlib import Path
 import numpy as np
 
 class SliceData(Dataset):
-    def __init__(self, root, transform, input_key, input_img_key, target_key, forward=False, modality='all', kspace_augment=False):
+    def __init__(self, root, transform, input_key, input_img_key, target_key, forward=False, modality='all', kspace_augment=False, additional_root=None):
         self.transform = transform
         self.input_key = input_key
         self.input_img_key = input_img_key
@@ -25,6 +25,10 @@ class SliceData(Dataset):
             return [f for f in files if modality in f.name]
 
         image_files = list(Path(root / "image").iterdir())
+        if additional_root:
+            additional_image_files = list(Path(additional_root / "image").iterdir())
+            image_files.extend(additional_image_files)
+
         image_files = _filter_modality(image_files)
         for fname in sorted(image_files):
             num_slices = self._get_metadata(fname)
@@ -77,7 +81,7 @@ class SliceData(Dataset):
         return self.transform(mask, input, input_img, target, attrs, kspace_fname.name, dataslice, self.kspace_augment)
 
 
-def create_data_loaders(data_path, args, shuffle=False, isforward=False, kspace_augment=False):
+def create_data_loaders(data_path, args, shuffle=False, isforward=False, kspace_augment=False, additional_root=None):
     if isforward == False:
         max_key_ = args.max_key
         target_key_ = args.target_key
@@ -92,7 +96,8 @@ def create_data_loaders(data_path, args, shuffle=False, isforward=False, kspace_
         target_key=target_key_,
         forward=isforward,
         modality=getattr(args, 'modality', 'all'),
-        kspace_augment=kspace_augment
+        kspace_augment=kspace_augment,
+        additional_root=additional_root
     )
 
     data_loader = DataLoader(

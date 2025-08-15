@@ -1,18 +1,23 @@
 python train.py \
   -b 1 \
-  -e 40 \
-  --num-aug-epochs 20 \
+  -a 1 \
+  -e 10 \
+  --num-aug-epochs 10 \
   --using-noise-mask \
   -l 0.0002 \
   --alpha 0.84 \
   -r 10 \
-  --cascade 20 \
-  --chans 18 \
-  --sens_chans 8 \
+  --cascade 12 \
+  --chans 32 \
+  --sens_chans 16 \
   --pools 4 \
   --sens_pools 4 \
   -m 'knee' \
-  -n 'FeatureVarNet_20_18_8_knee_0807' \
+  -n 'FeatureVarNet_12_32_16_knee_0815_LeaderboardVal' \
   -t '../Data/train/' \
-  -v '../Data/val/'
-  #--pretrained-model-path '../result/FeatureVarNet_8_16_6_knee_aug_0721/checkpoints/best_model.pt' \
+  -ta '../Data/val/' \
+  -v '../Data/leaderboard/acc4/' \
+  -va '../Data/leaderboard/acc8/' \
+  --no-using-cpu-memory \
+  --no-using-memory-efficient \
+  --pretrained-model-path '../result/FeatureVarNet_12_32_16_knee_0814/checkpoints/best_model.pt' \
