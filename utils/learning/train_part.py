@@ -239,7 +239,10 @@ def train(args):
                    chans=args.chans, 
                    sens_chans=args.sens_chans,
                    sens_pools=args.sens_pools,
-                   pools=args.pools)
+                   pools=args.pools,
+                   using_memory_efficient= not args.no_using_memory_efficient,
+                   using_cpu_memory=not args.no_using_cpu_memory
+                   )
 
     base_lr = args.lr
     optimizer = torch.optim.AdamW(model.parameters(), base_lr, weight_decay=1e-6)
