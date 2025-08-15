@@ -37,6 +37,9 @@ class SliceData(Dataset):
             ]
 
         kspace_files = list(Path(root / "kspace").iterdir())
+        if additional_root:
+            additional_kspace_files = list(Path(additional_root / "kspace").iterdir())
+            kspace_files.extend(additional_kspace_files)
         kspace_files = _filter_modality(kspace_files)
         for fname in sorted(kspace_files):
             num_slices = self._get_metadata(fname)
