@@ -40,7 +40,9 @@ def forward(args):
         'chans': args.chans_brain,
         'sens_chans': args.sens_chans_brain,
         'pools': args.pools_brain,
-        'sens_pools': args.sens_pools_brain
+        'sens_pools': args.sens_pools_brain,
+        'using_memory_efficient': not args.no_using_memory_efficient,
+        'using_cpu_memory': not args.no_using_cpu_memory
     }
 
     # knee FeatureVarNet arguments
@@ -49,7 +51,9 @@ def forward(args):
         'chans': args.chans_knee,
         'sens_chans': args.sens_chans_knee,
         'pools': args.pools_knee,
-        'sens_pools': args.sens_pools_knee
+        'sens_pools': args.sens_pools_knee,
+        'using_memory_efficient': not args.no_using_memory_efficient,
+        'using_cpu_memory': not args.no_using_cpu_memory
     }
 
     moe_model = MoEModel(brain_model_args=brain_model_args, knee_model_args=knee_model_args)

@@ -17,6 +17,8 @@ def parse():
     parser.add_argument('-p', '--path_data', type=Path, default='/Data/leaderboard/', help='Directory of test data')
     parser.add_argument("--input_key", type=str, default='kspace', help='Name of input key')
     parser.add_argument("--input_img_key", type=str, default='image_input', help='Name of input image key')
+    parser.add_argument('--no-using-cpu-memory', action='store_true', help='Whether to use CPU memory for training')
+    parser.add_argument('--no-using-memory-efficient', action='store_true', help='Whether to use memory-efficient training')
 
     # Brain Varnet parameters
     parser.add_argument('--cascade_brain', type=int, default=1, help='Number of cascades | Should be less than 12')
