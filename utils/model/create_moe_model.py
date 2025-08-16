@@ -9,8 +9,10 @@ def parse():
                                     formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     parser.add_argument('-n', '--net_name', type=Path, default='test_varnet', help='Name of network')
     parser.add_argument('-g', '--GPU-NUM', type=int, default=0, help='GPU number to allocate')
-    parser.add_argument('--no-using-cpu-memory', action='store_true', help='Whether to use CPU memory for training')
-    parser.add_argument('--no-using-memory-efficient', action='store_true', help='Whether to use memory-efficient training')
+    parser.add_argument('--no-using-cpu-memory-brain', action='store_true', help='Whether to use CPU memory for training in brain Varnet')
+    parser.add_argument('--no-using-memory-efficient-brain', action='store_true', help='Whether to use memory-efficient training in brain Varnet')
+    parser.add_argument('--no-using-cpu-memory-knee', action='store_true', help='Whether to use CPU memory for training in knee Varnet')
+    parser.add_argument('--no-using-memory-efficient-knee', action='store_true', help='Whether to use memory-efficient training in knee Varnet')
 
     # Brain Varnet parameters
     parser.add_argument('--cascade_brain', type=int, default=1, help='Number of cascades | Should be less than 12')
@@ -46,8 +48,8 @@ if __name__ == '__main__':
         'sens_chans': args.sens_chans_brain,
         'pools': args.pools_brain,
         'sens_pools': args.sens_pools_brain,
-        'using_memory_efficient': not args.no_using_memory_efficient,
-        'using_cpu_memory': not args.no_using_cpu_memory
+        'using_memory_efficient': not args.no_using_memory_efficient_brain,
+        'using_cpu_memory': not args.no_using_cpu_memory_brain
     }
 
     # knee FeatureVarNet arguments
@@ -57,8 +59,8 @@ if __name__ == '__main__':
         'sens_chans': args.sens_chans_knee,
         'pools': args.pools_knee,
         'sens_pools': args.sens_pools_knee,
-        'using_memory_efficient': not args.no_using_memory_efficient,
-        'using_cpu_memory': not args.no_using_cpu_memory
+        'using_memory_efficient': not args.no_using_memory_efficient_knee,
+        'using_cpu_memory': not args.no_using_cpu_memory_knee
     }
 
     # MoE 모델 생성

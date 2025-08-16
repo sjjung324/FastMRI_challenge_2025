@@ -3,6 +3,23 @@ import torch.nn as nn
 from feature_varnet import FeatureVarNet_sh_w as VarNet
 from simple_classifier import SimpleClassifier
 
+# Patch PosixPath -> WindowsPath when loading pickled checkpoints on Windows
+from contextlib import contextmanager
+import os
+import pathlib
+
+@contextmanager
+def _patch_posixpath_on_windows():
+    if os.name == 'nt' and hasattr(pathlib, 'PosixPath'):
+        _orig = pathlib.PosixPath
+        try:
+            pathlib.PosixPath = pathlib.WindowsPath  # type: ignore[attr-defined]
+            yield
+        finally:
+            pathlib.PosixPath = _orig
+    else:
+        yield
+
 class MoEModel(nn.Module):
     def __init__(self, brain_model_args, knee_model_args):
         super().__init__()
@@ -11,14 +28,16 @@ class MoEModel(nn.Module):
         self.classifier = SimpleClassifier()
 
     def load_models(self, brain_model_path, knee_model_path, classifier_path, device):
-        brain_ckpt = torch.load(brain_model_path, map_location=device, weights_only=False)
-        self.brain_net.load_state_dict(brain_ckpt['model'])
+        # Use a safe context so Windows can load checkpoints saved on Linux (PosixPath in pickles)
+        with _patch_posixpath_on_windows():
+            brain_ckpt = torch.load(brain_model_path, map_location=device, weights_only=False)
+            self.brain_net.load_state_dict(brain_ckpt['model'])
 
-        knee_ckpt = torch.load(knee_model_path, map_location=device, weights_only=False)
-        self.knee_net.load_state_dict(knee_ckpt['model'])
+            knee_ckpt = torch.load(knee_model_path, map_location=device, weights_only=False)
+            self.knee_net.load_state_dict(knee_ckpt['model'])
 
-        classifier_ckpt = torch.load(classifier_path, map_location=device, weights_only=False)
-        self.classifier.load_state_dict(classifier_ckpt['model'])
+            classifier_ckpt = torch.load(classifier_path, map_location=device, weights_only=False)
+            self.classifier.load_state_dict(classifier_ckpt['model'])
 
     def forward(self, masked_kspace, mask, input_img):
         '''
