@@ -112,9 +112,9 @@ def train_epoch(args, epoch, model, data_loader, optimizer, using_noise_mask=Fal
 def validate(args, model, data_loader, using_noise_mask=False):
     model.eval()
     reconstructions = defaultdict(dict)
-    maximums = defaultdict(dict)
     targets = defaultdict(dict)
     start = time.perf_counter()
+    total_loss = 0.
 
     with torch.no_grad():
         for iter, data in enumerate(data_loader):
@@ -126,14 +126,15 @@ def validate(args, model, data_loader, using_noise_mask=False):
 
             output = model(kspace, mask)
 
-       
             if using_noise_mask:
                 target, output = apply_mask_to_target_and_reconstruction(target, output, modality=args.modality)
 
             for i in range(output.shape[0]):
                 reconstructions[fnames[i]][int(slices[i])] = output[i].cpu().numpy()
                 targets[fnames[i]][int(slices[i])] = target[i].cpu().numpy()
-                maximums[fnames[i]][int(slices[i])] = maximum[i].cpu().numpy()
+
+            if args.data_path_val_additional is not None:
+                total_loss += ssim_loss(output.cpu().numpy(), target.cpu().numpy(), maximum.cpu().numpy())
 
     for fname in reconstructions:
         reconstructions[fname] = np.stack(
@@ -143,15 +144,14 @@ def validate(args, model, data_loader, using_noise_mask=False):
         targets[fname] = np.stack(
             [out for _, out in sorted(targets[fname].items())]
         )
+
     if args.data_path_val_additional is None:
-        for fname in maximums:
-            maximums[fname] = np.stack(
-                [out for _, out in sorted(maximums[fname].items())]
-            )
-        metric_loss = sum([ssim_loss(targets[fname], reconstructions[fname], maxval=maximums[fname]) for fname in reconstructions])
+        metric_loss = sum([ssim_loss(targets[fname], reconstructions[fname]) for fname in reconstructions])
+        num_subjects = len(reconstructions)
     else:
-        metric_loss = sum([ssim_loss(targets[fname], reconstructions[fname], maxval=maximum.cpu().numpy()) for fname in reconstructions])
-    num_subjects = len(reconstructions)
+        metric_loss = total_loss
+        num_subjects = len(data_loader)
+
     return metric_loss, num_subjects, reconstructions, targets, None, time.perf_counter() - start
 
 
