@@ -18,6 +18,22 @@ from utils.common.loss_function import SSIMLoss, L1Loss
 from utils.model.feature_varnet import FeatureVarNet_sh_w as VarNet
 from utils.data.augmentation import augment_kspace
 
+from contextlib import contextmanager
+import os
+import pathlib
+
+@contextmanager
+def _patch_posixpath_on_windows():
+    if os.name == 'nt' and hasattr(pathlib, 'PosixPath'):
+        _orig = pathlib.PosixPath
+        try:
+            pathlib.PosixPath = pathlib.WindowsPath  # type: ignore[attr-defined]
+            yield
+        finally:
+            pathlib.PosixPath = _orig
+    else:
+        yield
+
 def train_epoch(args, epoch, model, data_loader, optimizer, using_noise_mask=False, using_augmentation=False, scaler=None, augmented_loader=None):
     device = torch.device(f'cuda:{args.GPU_NUM}' if torch.cuda.is_available() else 'cpu')
     model.train()
@@ -101,13 +117,14 @@ def validate(args, model, data_loader, using_noise_mask=False):
 
     with torch.no_grad():
         for iter, data in enumerate(data_loader):
-            mask, kspace, _, target, _, fnames, slices = data
+            mask, kspace, _, target, maximum, fnames, slices = data
             kspace = kspace.cuda(non_blocking=True)
             mask = mask.cuda(non_blocking=True)
             target = target.cuda(non_blocking=True)
+            maximum = maximum.cuda(non_blocking=True)
 
             output = model(kspace, mask)
-            
+
        
             if using_noise_mask:
                 target, output = apply_mask_to_target_and_reconstruction(target, output, modality=args.modality)
@@ -124,7 +141,10 @@ def validate(args, model, data_loader, using_noise_mask=False):
         targets[fname] = np.stack(
             [out for _, out in sorted(targets[fname].items())]
         )
-    metric_loss = sum([ssim_loss(targets[fname], reconstructions[fname]) for fname in reconstructions])
+    if args.data_path_val_additional is None:
+        metric_loss = sum([ssim_loss(targets[fname], reconstructions[fname]) for fname in reconstructions])
+    else:
+        metric_loss = sum([ssim_loss(targets[fname], reconstructions[fname], maxval=maximum) for fname in reconstructions])
     num_subjects = len(reconstructions)
     return metric_loss, num_subjects, reconstructions, targets, None, time.perf_counter() - start
 
@@ -253,21 +273,22 @@ def train(args):
     lr_log = np.empty((0, 2))
 
     if args.pretrained_model_path is not None:
-        model_ckpt = torch.load(args.pretrained_model_path, map_location='cpu', weights_only=False)
-        if 'model' in model_ckpt:
-            model.load_state_dict(model_ckpt['model'])
-            print("Pretrained Model Loaded")
+        with _patch_posixpath_on_windows():
+            model_ckpt = torch.load(args.pretrained_model_path, map_location='cpu', weights_only=False)
+            if 'model' in model_ckpt:
+                model.load_state_dict(model_ckpt['model'])
+                print("Pretrained Model Loaded")
 
-            if "optimizer" in model_ckpt:
-                optimizer.load_state_dict(model_ckpt["optimizer"])
-                for state in optimizer.state.values():
-                    for k, v in state.items():
-                        if torch.is_tensor(v):
-                            state[k] = v.to(device)
-                print("Optimizer state loaded.")
-        
-        else:
-            model.load_state_dict(model_ckpt)
+                if "optimizer" in model_ckpt:
+                    optimizer.load_state_dict(model_ckpt["optimizer"])
+                    for state in optimizer.state.values():
+                        for k, v in state.items():
+                            if torch.is_tensor(v):
+                                state[k] = v.to(device)
+                    print("Optimizer state loaded.")
+            
+            else:
+                model.load_state_dict(model_ckpt)
 
     if args.resume:
         if os.path.exists(args.exp_dir / 'model.pt'):
